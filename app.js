@@ -483,51 +483,106 @@ symbolInput.addEventListener('keydown', (e) => {
     }
 });
 
+const POPULAR_STOCKS = [
+    { symbol: 'RELIANCE.NS', name: 'Reliance Industries Ltd', exchange: 'NSE' },
+    { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', exchange: 'NSE' },
+    { symbol: 'HDFCBANK.NS', name: 'HDFC Bank Ltd', exchange: 'NSE' },
+    { symbol: 'ICICIBANK.NS', name: 'ICICI Bank Ltd', exchange: 'NSE' },
+    { symbol: 'INFY.NS', name: 'Infosys Ltd', exchange: 'NSE' },
+    { symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ' },
+    { symbol: 'TSLA', name: 'Tesla Inc.', exchange: 'NASDAQ' },
+    { symbol: 'MSFT', name: 'Microsoft Corporation', exchange: 'NASDAQ' },
+    { symbol: 'NVDA', name: 'NVIDIA Corporation', exchange: 'NASDAQ' },
+    { symbol: 'GOOGL', name: 'Alphabet Inc. (Google)', exchange: 'NASDAQ' },
+    { symbol: 'NARMADA.BO', name: 'Narmada Agrobase Limited', exchange: 'BSE' },
+    { symbol: 'SUNPHARMA.NS', name: 'Sun Pharmaceutical Industries Ltd', exchange: 'NSE' },
+    { symbol: 'TATAMOTORS.NS', name: 'Tata Motors Ltd', exchange: 'NSE' },
+    { symbol: 'SBIN.NS', name: 'State Bank of India', exchange: 'NSE' },
+    { symbol: 'BHARTIARTL.NS', name: 'Bharti Airtel Ltd', exchange: 'NSE' }
+];
+
+const SEARCH_CACHE = {};
+
+function renderSuggestions(results) {
+    if (results && results.length > 0) {
+        suggestionsBox.innerHTML = '';
+        results.forEach((item) => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            
+            const name = item.name.length > 25 ? item.name.slice(0, 22) + '...' : item.name;
+            const cleanSymbol = item.symbol.replace('.NS', '').replace('.BO', '');
+            
+            div.innerHTML = `
+                <div class="suggestion-name" title="${item.name}">${name}</div>
+                <div class="suggestion-meta">
+                    <span class="suggestion-symbol">${cleanSymbol}</span>
+                    <span style="font-size:0.75rem;opacity:0.8;">(${item.exchange})</span>
+                </div>
+            `;
+            div.addEventListener('click', () => {
+                symbolInput.value = item.symbol;
+                suggestionsBox.classList.add('hidden');
+                searchBtn.click();
+            });
+            suggestionsBox.appendChild(div);
+        });
+        suggestionsBox.classList.remove('hidden');
+    } else {
+        suggestionsBox.classList.add('hidden');
+    }
+}
+
 symbolInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
     activeSuggestionIndex = -1;
-    const query = symbolInput.value.trim();
+    const query = symbolInput.value.trim().toLowerCase();
+    
     if (query.length < 1) {
         suggestionsBox.classList.add('hidden');
         return;
     }
     
+    // 1. Get instant matches from our local popular stocks database
+    const localMatches = POPULAR_STOCKS.filter(item => 
+        item.symbol.toLowerCase().includes(query) || 
+        item.name.toLowerCase().includes(query)
+    );
+    
+    // Render local matches instantly to eliminate any lag!
+    renderSuggestions(localMatches.slice(0, 6));
+    
+    // 2. Fetch from backend API with short debounce and client caching
     searchTimeout = setTimeout(async () => {
+        if (query.length < 2) return; // Don't hit backend for single characters
+        
         try {
-            const res = await fetch(`/.netlify/functions/stock?action=search&q=${encodeURIComponent(query)}`);
-            const results = await res.json();
-            
-            if (results && results.length > 0) {
-                suggestionsBox.innerHTML = '';
-                results.slice(0, 5).forEach((item, index) => {
-                    const div = document.createElement('div');
-                    div.className = 'suggestion-item';
-                    
-                    const name = item.name.length > 25 ? item.name.slice(0, 22) + '...' : item.name;
-                    const cleanSymbol = item.symbol.replace('.NS', '');
-                    
-                    div.innerHTML = `
-                        <div class="suggestion-name" title="${item.name}">${name}</div>
-                        <div class="suggestion-meta">
-                            <span class="suggestion-symbol">${cleanSymbol}</span>
-                            <span style="font-size:0.75rem;opacity:0.8;">(${item.exchange})</span>
-                        </div>
-                    `;
-                    div.addEventListener('click', () => {
-                        symbolInput.value = item.symbol;
-                        suggestionsBox.classList.add('hidden');
-                        searchBtn.click();
-                    });
-                    suggestionsBox.appendChild(div);
-                });
-                suggestionsBox.classList.remove('hidden');
+            let results;
+            if (SEARCH_CACHE[query]) {
+                results = SEARCH_CACHE[query];
             } else {
-                suggestionsBox.classList.add('hidden');
+                const res = await fetch(`/.netlify/functions/stock?action=search&q=${encodeURIComponent(query)}`);
+                results = await res.json();
+                SEARCH_CACHE[query] = results;
             }
+            
+            // Merge local matches and backend results, removing duplicates
+            const merged = [...localMatches];
+            const seenSymbols = new Set(merged.map(item => item.symbol.toLowerCase()));
+            
+            results.forEach(item => {
+                if (!seenSymbols.has(item.symbol.toLowerCase())) {
+                    merged.push(item);
+                    seenSymbols.add(item.symbol.toLowerCase());
+                }
+            });
+            
+            // Render the final combined list (up to 6 items)
+            renderSuggestions(merged.slice(0, 6));
         } catch(e) {
             console.error("Suggestions error:", e);
         }
-    }, 300);
+    }, 150); // Reduced to 150ms debounce
 });
 
 // Close suggestions when clicking outside
