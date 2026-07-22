@@ -59,6 +59,26 @@ Applies modern glassmorphism styling, alert toast animations, search suggestion 
 ### 4. Zero-Dependency Local Backend (`server.py`)
 * Overwrote the mock Python backend with a functional HTTP handler that intercepts `/.netlify/functions/stock` routes and replicates the Netlify serverless routing locally using Python's standard library. Testing locally now has **zero Node.js dependencies**!
 
+## 📅 Session 3 Updates (July 22, 2026)
+
+### 1. "Know More" Company Overview Details Modal
+* **Interactive Button:** Added a bold white "Know More" button inside the price card container, styled with an information icon and hover animations.
+* **Glassmorphic Popup Overlay:** Created a full-screen backdrop-blurred overlay modal showcasing 12 key metrics, including:
+  * Market Capitalization
+  * Stock P/E
+  * Dividend Yield
+  * Day High/Low
+  * 52-Week High/Low
+  * Day Volume
+  * Book Value, Face Value, ROCE, and ROE
+* **Owner & CEO Display:** Added a highlighted metadata row displaying the company's CEO, Chairman, or Founder right above the overview paragraph.
+
+### 2. Live fundamental Data Integration (yfinance Backend)
+* **Real Live Metrics:** Integrated `yfinance` into [server.py](file:///c:/Users/priya/.gemini/antigravity-ide/scratch/stock-price-alert/server.py) to fetch 100% accurate financial values dynamically for any ticker searched (resolving the previous mock fallback values).
+* **Caching Engine:** Added an in-memory caching dictionary in Python with a 5-minute cooldown to prevent IP blocks and keep queries fast.
+* **Render Deployment Support:** Added `yfinance` to [requirements.txt](file:///c:/Users/priya/.gemini/antigravity-ide/scratch/stock-price-alert/requirements.txt) to allow Render to build and host the app with all dependencies.
+* **Hybrid Fallback Model:** Updated [app.js](file:///c:/Users/priya/.gemini/antigravity-ide/scratch/stock-price-alert/app.js) to dynamically utilize backend-supplied yfinance metrics if available, falling back to simulated values seamlessly on static servers.
+
 ---
 
 ## 🚀 How to Run / Deploy on Your Laptop

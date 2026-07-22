@@ -10,6 +10,29 @@ const lastUpdatedEl = document.getElementById('last-updated');
 const trendIconEl = document.getElementById('trend-icon');
 const chartLoader = document.getElementById('chart-loader');
 
+// Modal Elements
+const knowMoreBtn = document.getElementById('know-more-btn');
+const companyModal = document.getElementById('company-details-modal');
+const modalCloseBtn = document.getElementById('modal-close-btn');
+
+const modalCompanyName = document.getElementById('modal-company-name');
+const modalCompanyTicker = document.getElementById('modal-company-ticker');
+const modalCompanyExchange = document.getElementById('modal-company-exchange');
+const modalMarketCap = document.getElementById('modal-market-cap');
+const modalPeRatio = document.getElementById('modal-pe-ratio');
+const modalDivYield = document.getElementById('modal-div-yield');
+const modalVolume = document.getElementById('modal-volume');
+const modalDayRange = document.getElementById('modal-day-range');
+const modal52wRange = document.getElementById('modal-52w-range');
+const modalPrevClose = document.getElementById('modal-prev-close');
+const modalCurrentPrice = document.getElementById('modal-current-price');
+const modalCompanyDesc = document.getElementById('modal-company-desc');
+const modalBookValue = document.getElementById('modal-book-value');
+const modalFaceValue = document.getElementById('modal-face-value');
+const modalRoce = document.getElementById('modal-roce');
+const modalRoe = document.getElementById('modal-roe');
+const modalCompanyOwner = document.getElementById('modal-company-owner');
+
 // Top 10 Elements
 const top10ListEl = document.getElementById('top10-list');
 
@@ -39,6 +62,7 @@ let updateInterval = null;
 let activeAlert = null;
 let currentStockData = null;
 let insightsStockData = [];
+let activeStockDetails = null; // Stores current stock full metadata response
 
 // Old TOP_10_SYMBOLS declaration removed to fix SyntaxError
 
@@ -153,6 +177,8 @@ async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad 
         const changeValue = currentPrice - previousClose;
         const changePercent = (changeValue / previousClose) * 100;
         
+        activeStockDetails = data;
+        knowMoreBtn.classList.remove('hidden');
         updateDashboardUI(data.symbol.replace('.NS', ''), data.name, currentPrice, changeValue, changePercent);
         
         if (!isBackgroundUpdate && !isInitialLoad) {
@@ -796,6 +822,253 @@ submitLoginBtn.addEventListener('click', handleLogin);
 loginPasswordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
 submitSignupBtn.addEventListener('click', handleSignup);
 signupConfirmPasswordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSignup(); });
+
+// Modal & Company Database Helpers
+const companyDatabase = {
+    'RELIANCE.NS': {
+        shares: 13530000000,
+        pe: 23.4,
+        yield: '0.46%',
+        book: 668,
+        face: 10.0,
+        roce: '10.3%',
+        roe: '8.91%',
+        owner: 'Mukesh Ambani (Chairman & MD)',
+        desc: "Reliance was founded by Dhirubhai Ambani and is now promoted and managed by his elder son, Mukesh Dhirubhai Ambani. Ambani's family has about 50% shareholding in the conglomerate. It is India's largest private sector enterprise, spanning energy, petrochemicals, natural gas, retail, telecommunications, and media."
+    },
+    'TCS.NS': {
+        shares: 3618000000,
+        pe: 30.1,
+        yield: '1.20%',
+        book: 282,
+        face: 1.0,
+        roce: '62.5%',
+        roe: '50.8%',
+        owner: 'N. Chandrasekaran (Chairman) / K. Krithivasan (CEO)',
+        desc: "Tata Consultancy Services Limited (TCS) is a leading global IT services, consulting, and business solutions organization. Part of the Tata Group, India's largest multinational business group, TCS has over 600,000 consultants worldwide."
+    },
+    'HDFCBANK.NS': {
+        shares: 7600000000,
+        pe: 18.5,
+        yield: '1.10%',
+        book: 560,
+        face: 1.0,
+        roce: '8.2%',
+        roe: '15.4%',
+        owner: 'Sashidhar Jagdishan (CEO & MD)',
+        desc: "HDFC Bank Limited is India's leading private sector bank and was nearly the first to receive an 'in principle' approval from the RBI to set up a private bank. It is headquartered in Mumbai and offers a range of financial services."
+    },
+    'ICICIBANK.NS': {
+        shares: 7010000000,
+        pe: 17.8,
+        yield: '0.70%',
+        book: 320,
+        face: 2.0,
+        roce: '7.8%',
+        roe: '18.5%',
+        owner: 'Sandeep Bakhshi (CEO & MD)',
+        desc: "ICICI Bank Limited is a leading private sector bank in India, offering commercial banking, investment banking, life/non-life insurance, venture capital, and asset management services through various channels and subsidiaries."
+    },
+    'INFY.NS': {
+        shares: 4150000000,
+        pe: 24.2,
+        yield: '2.40%',
+        book: 210,
+        face: 5.0,
+        roce: '40.5%',
+        roe: '32.1%',
+        owner: 'Salil Parekh (CEO) / N. R. Narayana Murthy (Founder)',
+        desc: "Infosys Limited is a global leader in next-generation digital services and consulting. It enables clients in more than 56 countries to navigate their digital transformation, founded in Pune and headquartered in Bengaluru."
+    },
+    'AAPL': {
+        shares: 15330000000,
+        pe: 31.2,
+        yield: '0.52%',
+        book: 400.8,
+        face: 0.08,
+        roce: '58.2%',
+        roe: '150%',
+        owner: 'Tim Cook (CEO) / Steve Jobs (Founder)',
+        desc: "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories, and sells a variety of related services globally. Apple is the world's largest technology company by revenue."
+    },
+    'TSLA': {
+        shares: 3189000000,
+        pe: 58.7,
+        yield: 'N/A',
+        book: 1711.5,
+        face: 0.08,
+        roce: '12.5%',
+        roe: '14.2%',
+        owner: 'Elon Musk (CEO / Technoking)',
+        desc: "Tesla, Inc. designs, develops, manufactures, leases, and sells electric vehicles, and energy generation and storage systems in the United States, China, and internationally, operating under automotive and energy segments."
+    },
+    'MSFT': {
+        shares: 7432000000,
+        pe: 35.4,
+        yield: '0.72%',
+        book: 2212.8,
+        face: 0.08,
+        roce: '28.5%',
+        roe: '38.2%',
+        owner: 'Satya Nadella (Chairman & CEO) / Bill Gates (Founder)',
+        desc: "Microsoft Corporation develops, licenses, and supports software, services, devices, and solutions worldwide, well known for its Windows operating system, Microsoft 365, Azure, and Xbox gaming."
+    },
+    'NVDA': {
+        shares: 24600000000,
+        pe: 68.2,
+        yield: '0.02%',
+        book: 310.5,
+        face: 0.08,
+        roce: '48.2%',
+        roe: '52.1%',
+        owner: 'Jensen Huang (Founder & CEO)',
+        desc: "NVIDIA Corporation focuses on personal computer graphics, graphics processing units, and also on artificial intelligence solutions, headquartered in Santa Clara, California."
+    },
+    'GOOGL': {
+        shares: 12000000000,
+        pe: 26.8,
+        yield: '0.45%',
+        book: 1410.8,
+        face: 0.08,
+        roce: '20.3%',
+        roe: '22.8%',
+        owner: 'Sundar Pichai (CEO) / Larry Page & Sergey Brin (Founders)',
+        desc: "Alphabet Inc. offers Google Services, Google Cloud, and Other Bets. Its Google Services segment includes products and services such as Ads, Android, Chrome, Hardware, Gmail, Google Drive, Google Maps, Google Play, Search, and YouTube."
+    }
+};
+
+function getCompanyDetails(symbol, name) {
+    const key = symbol.toUpperCase();
+    
+    if (companyDatabase[key]) {
+        return companyDatabase[key];
+    }
+    
+    const cleanKey = key.split('.')[0];
+    const baseSymbols = Object.keys(companyDatabase).map(k => k.split('.')[0]);
+    const idx = baseSymbols.indexOf(cleanKey);
+    if (idx !== -1) {
+        return companyDatabase[Object.keys(companyDatabase)[idx]];
+    }
+    
+    const isIndian = key.includes('.NS') || key.includes('.BO') || ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK'].includes(cleanKey);
+    const exchange = isIndian ? 'NSE' : 'US Market';
+
+    let hash = 0;
+    for (let i = 0; i < cleanKey.length; i++) {
+        hash = cleanKey.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    hash = Math.abs(hash);
+    
+    const simulatedPE = Number(((hash % 30) + 12).toFixed(1));
+    const yields = ['N/A', '0.40%', '0.85%', '1.20%', '1.50%', '2.10%'];
+    const simulatedYield = yields[hash % yields.length];
+    const simulatedShares = ((hash % 15) + 1) * 500000000;
+    
+    const simulatedBook = ((hash % 400) + 50);
+    const simulatedFace = isIndian ? [1.0, 2.0, 5.0, 10.0][hash % 4] : 0.08;
+    const simulatedROCE = ((hash % 25) + 5).toFixed(1) + '%';
+    const simulatedROE = ((hash % 20) + 4).toFixed(1) + '%';
+    
+    const owners = ['Promoter Group', 'Institutional Founders', 'Board of Directors', 'Key Executives'];
+    const simulatedOwner = owners[hash % owners.length];
+    
+    const simulatedDesc = `${name || cleanKey} is a publicly traded enterprise listed on the ${exchange}. The firm focuses on operations in its sector, contributing to global markets, and is tracked as part of our stock price monitoring index.`;
+    
+    return {
+        shares: simulatedShares,
+        pe: simulatedPE,
+        yield: simulatedYield,
+        book: simulatedBook,
+        face: simulatedFace,
+        roce: simulatedROCE,
+        roe: simulatedROE,
+        owner: simulatedOwner,
+        desc: simulatedDesc
+    };
+}
+
+function formatMarketCap(val) {
+    if (!val) return '₹ --';
+    const croreVal = val / 10000000;
+    if (croreVal >= 100000) {
+        return `₹ ${(croreVal / 100000).toFixed(2)} Lakh Cr`;
+    } else {
+        return `₹ ${Math.round(croreVal).toLocaleString('en-IN')} Cr`;
+    }
+}
+
+function showCompanyDetailsModal() {
+    if (!activeStockDetails) return;
+    
+    const data = activeStockDetails;
+    const details = getCompanyDetails(data.symbol, data.name);
+    const isIndian = data.symbol.includes('.NS') || data.symbol.includes('.BO');
+
+    modalCompanyName.textContent = data.name || data.symbol.split('.')[0];
+    modalCompanyTicker.textContent = data.symbol;
+    modalCompanyExchange.textContent = isIndian ? 'NSE' : (data.symbol.includes('.BO') ? 'BSE' : 'NASDAQ / NYSE');
+    
+    // 1. Market Cap (live from backend yfinance OR computed from fallback)
+    const marketCapVal = data.marketCap !== undefined && data.marketCap !== null ? data.marketCap : (details.shares * data.price);
+    modalMarketCap.textContent = formatMarketCap(marketCapVal);
+    
+    // 2. PE Ratio
+    modalPeRatio.textContent = data.peRatio !== undefined && data.peRatio !== null ? Number(data.peRatio).toFixed(2) : details.pe;
+    
+    // 3. Dividend Yield
+    modalDivYield.textContent = data.dividendYield !== undefined && data.dividendYield !== null ? data.dividendYield : details.yield;
+    
+    // 4. Volume
+    modalVolume.textContent = data.regularMarketVolume ? data.regularMarketVolume.toLocaleString('en-IN') : 'N/A';
+    
+    // 5. Day Range
+    const dayLowVal = data.regularMarketDayLow ? formatINR(data.regularMarketDayLow) : 'N/A';
+    const dayHighVal = data.regularMarketDayHigh ? formatINR(data.regularMarketDayHigh) : 'N/A';
+    modalDayRange.textContent = (data.regularMarketDayLow && data.regularMarketDayHigh) ? `${dayLowVal} - ${dayHighVal}` : 'N/A';
+    
+    // 6. 52-Week Range
+    const low52Val = data.fiftyTwoWeekLow ? formatINR(data.fiftyTwoWeekLow) : 'N/A';
+    const high52Val = data.fiftyTwoWeekHigh ? formatINR(data.fiftyTwoWeekHigh) : 'N/A';
+    modal52wRange.textContent = (data.fiftyTwoWeekLow && data.fiftyTwoWeekHigh) ? `${low52Val} - ${high52Val}` : 'N/A';
+    
+    modalPrevClose.textContent = data.prevClose ? formatINR(data.prevClose) : 'N/A';
+    modalCurrentPrice.textContent = data.price ? formatINR(data.price) : 'N/A';
+    
+    // 7. Book Value
+    const bookVal = data.bookValue !== undefined && data.bookValue !== null ? data.bookValue : details.book;
+    modalBookValue.textContent = formatINR(bookVal);
+    
+    // 8. Face Value
+    const faceVal = data.faceValue !== undefined && data.faceValue !== null ? data.faceValue : details.face;
+    modalFaceValue.textContent = formatINR(faceVal);
+    
+    // 9. ROCE
+    modalRoce.textContent = data.roce !== undefined && data.roce !== null ? data.roce : details.roce;
+    
+    // 10. ROE
+    modalRoe.textContent = data.roe !== undefined && data.roe !== null ? data.roe : details.roe;
+    
+    // 11. Owner
+    modalCompanyOwner.textContent = data.owner !== undefined && data.owner !== null ? data.owner : details.owner;
+    
+    // 12. Description
+    modalCompanyDesc.textContent = data.description !== undefined && data.description !== null ? data.description : details.desc;
+    
+    companyModal.classList.remove('hidden');
+}
+
+function closeCompanyDetailsModal() {
+    companyModal.classList.add('hidden');
+}
+
+knowMoreBtn.addEventListener('click', showCompanyDetailsModal);
+modalCloseBtn.addEventListener('click', closeCompanyDetailsModal);
+companyModal.addEventListener('click', (e) => {
+    if (e.target === companyModal) {
+        closeCompanyDetailsModal();
+    }
+});
 
 // Header buttons click listeners
 headerLoginBtn.addEventListener('click', () => {
