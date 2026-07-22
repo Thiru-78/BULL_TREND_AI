@@ -31,6 +31,7 @@ const modalBookValue = document.getElementById('modal-book-value');
 const modalFaceValue = document.getElementById('modal-face-value');
 const modalRoce = document.getElementById('modal-roce');
 const modalRoe = document.getElementById('modal-roe');
+const modalCompanyOwner = document.getElementById('modal-company-owner');
 
 // Top 10 Elements
 const top10ListEl = document.getElementById('top10-list');
@@ -721,6 +722,7 @@ const companyDatabase = {
         face: 10.0,
         roce: '10.3%',
         roe: '8.91%',
+        owner: 'Mukesh Ambani (Chairman & MD)',
         desc: "Reliance was founded by Dhirubhai Ambani and is now promoted and managed by his elder son, Mukesh Dhirubhai Ambani. Ambani's family has about 50% shareholding in the conglomerate. It is India's largest private sector enterprise, spanning energy, petrochemicals, natural gas, retail, telecommunications, and media."
     },
     'TCS.NS': {
@@ -731,6 +733,7 @@ const companyDatabase = {
         face: 1.0,
         roce: '62.5%',
         roe: '50.8%',
+        owner: 'N. Chandrasekaran (Chairman) / K. Krithivasan (CEO)',
         desc: "Tata Consultancy Services Limited (TCS) is a leading global IT services, consulting, and business solutions organization. Part of the Tata Group, India's largest multinational business group, TCS has over 600,000 consultants worldwide."
     },
     'HDFCBANK.NS': {
@@ -741,6 +744,7 @@ const companyDatabase = {
         face: 1.0,
         roce: '8.2%',
         roe: '15.4%',
+        owner: 'Sashidhar Jagdishan (CEO & MD)',
         desc: "HDFC Bank Limited is India's leading private sector bank and was nearly the first to receive an 'in principle' approval from the RBI to set up a private bank. It is headquartered in Mumbai and offers a range of financial services."
     },
     'ICICIBANK.NS': {
@@ -751,6 +755,7 @@ const companyDatabase = {
         face: 2.0,
         roce: '7.8%',
         roe: '18.5%',
+        owner: 'Sandeep Bakhshi (CEO & MD)',
         desc: "ICICI Bank Limited is a leading private sector bank in India, offering commercial banking, investment banking, life/non-life insurance, venture capital, and asset management services through various channels and subsidiaries."
     },
     'INFY.NS': {
@@ -761,6 +766,7 @@ const companyDatabase = {
         face: 5.0,
         roce: '40.5%',
         roe: '32.1%',
+        owner: 'Salil Parekh (CEO) / N. R. Narayana Murthy (Founder)',
         desc: "Infosys Limited is a global leader in next-generation digital services and consulting. It enables clients in more than 56 countries to navigate their digital transformation, founded in Pune and headquartered in Bengaluru."
     },
     'AAPL': {
@@ -771,6 +777,7 @@ const companyDatabase = {
         face: 0.08,
         roce: '58.2%',
         roe: '150%',
+        owner: 'Tim Cook (CEO) / Steve Jobs (Founder)',
         desc: "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories, and sells a variety of related services globally. Apple is the world's largest technology company by revenue."
     },
     'TSLA': {
@@ -781,6 +788,7 @@ const companyDatabase = {
         face: 0.08,
         roce: '12.5%',
         roe: '14.2%',
+        owner: 'Elon Musk (CEO / Technoking)',
         desc: "Tesla, Inc. designs, develops, manufactures, leases, and sells electric vehicles, and energy generation and storage systems in the United States, China, and internationally, operating under automotive and energy segments."
     },
     'MSFT': {
@@ -791,6 +799,7 @@ const companyDatabase = {
         face: 0.08,
         roce: '28.5%',
         roe: '38.2%',
+        owner: 'Satya Nadella (Chairman & CEO) / Bill Gates (Founder)',
         desc: "Microsoft Corporation develops, licenses, and supports software, services, devices, and solutions worldwide, well known for its Windows operating system, Microsoft 365, Azure, and Xbox gaming."
     },
     'NVDA': {
@@ -801,6 +810,7 @@ const companyDatabase = {
         face: 0.08,
         roce: '48.2%',
         roe: '52.1%',
+        owner: 'Jensen Huang (Founder & CEO)',
         desc: "NVIDIA Corporation focuses on personal computer graphics, graphics processing units, and also on artificial intelligence solutions, headquartered in Santa Clara, California."
     },
     'GOOGL': {
@@ -811,6 +821,7 @@ const companyDatabase = {
         face: 0.08,
         roce: '20.3%',
         roe: '22.8%',
+        owner: 'Sundar Pichai (CEO) / Larry Page & Sergey Brin (Founders)',
         desc: "Alphabet Inc. offers Google Services, Google Cloud, and Other Bets. Its Google Services segment includes products and services such as Ads, Android, Chrome, Hardware, Gmail, Google Drive, Google Maps, Google Play, Search, and YouTube."
     }
 };
@@ -848,6 +859,9 @@ function getCompanyDetails(symbol, name) {
     const simulatedROCE = ((hash % 25) + 5).toFixed(1) + '%';
     const simulatedROE = ((hash % 20) + 4).toFixed(1) + '%';
     
+    const owners = ['Promoter Group', 'Institutional Founders', 'Board of Directors', 'Key Executives'];
+    const simulatedOwner = owners[hash % owners.length];
+    
     const simulatedDesc = `${name || cleanKey} is a publicly traded enterprise listed on the ${exchange}. The firm focuses on operations in its sector, contributing to global markets, and is tracked as part of our stock price monitoring index.`;
     
     return {
@@ -858,6 +872,7 @@ function getCompanyDetails(symbol, name) {
         face: simulatedFace,
         roce: simulatedROCE,
         roe: simulatedROE,
+        owner: simulatedOwner,
         desc: simulatedDesc
     };
 }
@@ -905,6 +920,7 @@ function showCompanyDetailsModal() {
     modalFaceValue.textContent = formatINR(details.face);
     modalRoce.textContent = details.roce;
     modalRoe.textContent = details.roe;
+    modalCompanyOwner.textContent = details.owner;
     modalCompanyDesc.textContent = details.desc;
     
     companyModal.classList.remove('hidden');
