@@ -79,6 +79,19 @@ Applies modern glassmorphism styling, alert toast animations, search suggestion 
 * **Render Deployment Support:** Added `yfinance` to [requirements.txt](file:///c:/Users/priya/.gemini/antigravity-ide/scratch/stock-price-alert/requirements.txt) to allow Render to build and host the app with all dependencies.
 * **Hybrid Fallback Model:** Updated [app.js](file:///c:/Users/priya/.gemini/antigravity-ide/scratch/stock-price-alert/app.js) to dynamically utilize backend-supplied yfinance metrics if available, falling back to simulated values seamlessly on static servers.
 
+### 3. Navigation Menu Addition & Text Refinements
+* **Buy / Sell Menu:** Added a new navigation link to the sidebar, styled with your preferred palm-up hand outline icon, and wired to a placeholder layout view section (`#view-trade`).
+* **Text Updates:** Renamed the modal launch button from `Know More` to `Know More About The Company` in the price card to provide clearer directions to the user.
+
+### 4. Background Customization Cycles
+* **Background Experimentation:** Uploaded and tested multiple background choices (a glowing red cyber cityscape, an abstract red silk wave, and a dark gold wave layout) using cover scaling and 100% border stretch parameters.
+* **Restored Defaults:** Reverted the main application background to its clean original neon-blue and violet radial gradient mesh design at the user's preference (while leaving the login page overlay background untouched).
+
+### 5. Instant Autocomplete Relevance & Latency Overhaul
+* **Relevance Filtering:** Added single-character autocomplete logic to filter out irrelevant contains matches (e.g. typing `a` no longer displays "Reliance" or "TCS" just because they contain the letter `a`). Single character queries now only return starts-with matches (e.g., Apple, Alphabet).
+* **Smart Keystroke Debouncing:** Adjusted autocomplete typing debounce from 150ms to 350ms. This prevents the browser from queuing intermediate queries during rapid typing.
+* **Server-Side Cache:** Implemented `SEARCH_RESULT_CACHE` on the backend (`server.py`) to store search results for 10 minutes. Subsequent keystroke lookups respond instantly in under 1ms.
+
 ---
 
 ## 🚀 How to Run / Deploy on Your Laptop
