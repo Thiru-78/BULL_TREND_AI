@@ -113,6 +113,9 @@ Applies modern glassmorphism styling, alert toast animations, search suggestion 
 * **Top Header Navigation:** Re-styled the sidebar into a horizontal tab header row with hidden scrollbars for small screens.
 * **Compact Card Dimensions:** Reduced padding and scaled heading sizes on viewports below 600px, aligning layout objects without visual text cutoff.
 
+### 4. 2-Year Stock Chart Timeline
+* **2-Year Stock Chart:** Upgraded the price history chart range from 1-day intraday (2-minute intervals) to a minimum of 2-year daily historical closes. Updated timestamp formats to calendar dates (`%d %b %Y`) and adjusted chart titles/filter badges to `2Y`.
+
 ---
 
 ## 🚀 How to Run / Deploy on Your Laptop
