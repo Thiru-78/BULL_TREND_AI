@@ -1879,3 +1879,197 @@ body {
     }
 }
 
+
+/* --- NEW FEATURES CSS --- */
+
+/* Marquee Ticker */
+.ticker-marquee-container {
+    width: 100%;
+    overflow: hidden;
+    background: rgba(13, 17, 28, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.ticker-marquee {
+    display: flex;
+    white-space: nowrap;
+    animation: marquee 90s linear infinite;
+}
+
+.ticker-marquee:hover {
+    animation-play-state: paused;
+}
+
+.ticker-item {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 15px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ticker-item:last-child {
+    border-right: none;
+}
+
+.ticker-symbol {
+    color: var(--text-light);
+    margin-right: 6px;
+}
+
+.ticker-price {
+    color: var(--text-main);
+    margin-right: 6px;
+}
+
+.ticker-change {
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+}
+
+.ticker-change.positive { color: var(--success); }
+.ticker-change.negative { color: var(--danger); }
+
+@keyframes marquee {
+    0%   { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+}
+
+/* User Profile Dropdown */
+.profile-toggle-btn {
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+    color: var(--text-muted);
+}
+.profile-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 10px;
+    width: 240px;
+    border-radius: 12px;
+    background: rgba(20, 24, 36, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    z-index: 1000;
+    overflow: hidden;
+    transform-origin: top right;
+    animation: dropdownSlideIn 0.2s ease-out forwards;
+}
+
+@keyframes dropdownSlideIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.dropdown-menu.hidden {
+    display: none;
+}
+
+.dropdown-header {
+    padding: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.dropdown-header .avatar-large {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+}
+.dropdown-user-info {
+    display: flex;
+    flex-direction: column;
+}
+.dropdown-user-info strong {
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+.dropdown-user-info span {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.dropdown-list {
+    list-style: none;
+    padding: 8px 0;
+    margin: 0;
+}
+.dropdown-item {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 10px 16px;
+    color: var(--text-light);
+    font-size: 0.9rem;
+    font-family: 'Space Grotesk', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+}
+.dropdown-item svg {
+    color: var(--text-muted);
+}
+.dropdown-item:hover svg {
+    color: var(--primary);
+}
+
+.dropdown-footer {
+    padding: 8px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.dropdown-item.text-danger {
+    color: var(--danger);
+}
+.dropdown-item.text-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+}
+.dropdown-item.text-danger svg {
+    color: var(--danger);
+}
+
+/* Alerts Layout Overrides */
+.alerts-grid-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+    align-items: start;
+}
+.alert-card {
+    margin: 0 !important;
+}
+
+@media (max-width: 800px) {
+    .alerts-grid-layout {
+        grid-template-columns: 1fr;
+    }
+}

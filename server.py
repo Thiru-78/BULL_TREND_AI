@@ -40,6 +40,8 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
         # Route Netlify API requests locally
         if '/.netlify/functions/stock' in path:
             self.handle_netlify_stock(query_params)
+        elif '/api/top10' in path:
+            self.handle_top10(query_params)
         else:
             # Serve static files from the current folder (index.html, app.js, style.css, logo.png, etc.)
             super().do_GET()
@@ -51,6 +53,54 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(data).encode('utf-8'))
         
+    def handle_top10(self, query_params):
+        try:
+            symbols = query_params.get('symbols', [''])[0]
+            if not symbols:
+                return self.send_json([])
+            symbol_list = [s.strip() for s in symbols.split(',') if s.strip()]
+            
+            # Use threads for faster downloading of multiple tickers
+            data = yf.download(tickers=symbol_list, period='2d', group_by='ticker', threads=True, progress=False)
+            results = []
+            
+            for sym in symbol_list:
+                try:
+                    if len(symbol_list) == 1:
+                        df = data
+                    else:
+                        df = data[sym]
+                        
+                    df = df.dropna(subset=['Close'])
+                    if len(df) >= 1:
+                        current_price = df['Close'].iloc[-1]
+                        # Use pandas checking for scalar values
+                        current_price = current_price.item() if hasattr(current_price, 'item') else float(current_price)
+                        
+                        if len(df) >= 2:
+                            prev_close = df['Close'].iloc[-2]
+                            prev_close = prev_close.item() if hasattr(prev_close, 'item') else float(prev_close)
+                            change = current_price - prev_close
+                            pct_change = (change / prev_close) * 100
+                        else:
+                            change = 0.0
+                            pct_change = 0.0
+                            
+                        currency = 'INR' if sym.endswith('.NS') or sym.endswith('.BO') else 'USD'
+                        results.append({
+                            'symbol': sym,
+                            'price': float(current_price),
+                            'change': float(change),
+                            'percent_change': float(pct_change),
+                            'currency': currency
+                        })
+                except Exception as e:
+                    print(f"Error processing ticker {sym}: {e}")
+                    
+            self.send_json(results)
+        except Exception as e:
+            self.send_json({"error": str(e)}, status=500)
+
     def end_headers(self):
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         self.send_header('Pragma', 'no-cache')

@@ -615,6 +615,11 @@ function checkAlerts(currentPrice) {
                 osc2.frequency.setValueAtTime(1046.50, ctx.currentTime); osc2.start(); osc2.stop(ctx.currentTime + 0.2);
             }, 150);
         } catch (e) {}
+        
+        if (typeof addAlertHistoryRecord === 'function') {
+            addAlertHistoryRecord(symbolStr, currentPrice, activeAlert.condition, activeAlert.price);
+        }
+        
         clearAlert();
     }
 }
@@ -975,13 +980,14 @@ function showAuthScreen(screenId) {
 function enterDashboard(mode, username = '') {
     authOverlay.classList.add('hidden');
     
-    if (mode === 'logged_in') {
-        headerAuthButtons.classList.add('hidden');
-        headerUserProfile.classList.remove('hidden');
+    headerAuthButtons.classList.add('hidden');
+    headerUserProfile.classList.remove('hidden');
+    if (mode === 'logged_in' && username) {
         userDisplayName.textContent = username;
-    } else {
-        headerAuthButtons.classList.remove('hidden');
-        headerUserProfile.classList.add('hidden');
+        const ddName = document.getElementById('dropdown-name');
+        const ddUser = document.getElementById('dropdown-username');
+        if (ddName) ddName.textContent = username;
+        if (ddUser) ddUser.textContent = username;
     }
     
     if (!appInitialized) {
@@ -2252,3 +2258,141 @@ function populateTradeForm() {
     }
     recalcEstCost();
 }
+
+// --- NEW FEATURES LOGIC ---
+
+// 1. Profile Dropdown Logic
+const profileDropdownBtn = document.getElementById('profile-dropdown-btn');
+const profileDropdownMenu = document.getElementById('profile-dropdown-menu');
+
+if (profileDropdownBtn && profileDropdownMenu) {
+    profileDropdownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileDropdownMenu.classList.toggle('hidden');
+        const expanded = profileDropdownMenu.classList.contains('hidden') ? 'false' : 'true';
+        profileDropdownBtn.setAttribute('aria-expanded', expanded);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!profileDropdownMenu.contains(e.target) && !profileDropdownBtn.contains(e.target)) {
+            profileDropdownMenu.classList.add('hidden');
+            profileDropdownBtn.setAttribute('aria-expanded', 'false');
+        }
+    });
+}
+
+// 2. Alert History & Logs Logic
+const alertHistoryList = document.getElementById('alert-history-list');
+const alertHistorySearch = document.getElementById('alert-history-search');
+
+let alertHistoryLogs = JSON.parse(localStorage.getItem('alertHistoryLogs') || '[]');
+
+function renderAlertHistory(filterText = '') {
+    if (!alertHistoryList) return;
+    
+    alertHistoryList.innerHTML = '';
+    const filteredLogs = alertHistoryLogs.filter(log => 
+        log.symbol.toLowerCase().includes(filterText.toLowerCase())
+    );
+
+    if (filteredLogs.length === 0) {
+        alertHistoryList.innerHTML = `<li style="text-align: center; color: var(--text-muted); padding: 20px;">No alerts found matching filter</li>`;
+        return;
+    }
+
+    // Render most recent first
+    [...filteredLogs].reverse().forEach(log => {
+        const li = document.createElement('li');
+        li.style.padding = '12px 16px';
+        li.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+        li.style.display = 'flex';
+        li.style.flexDirection = 'column';
+        li.style.gap = '4px';
+
+        const dateStr = new Date(log.timestamp).toLocaleString();
+        const icon = log.condition === 'above' ? 
+            `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="var(--success)" stroke-width="2" style="margin-right:4px;"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>` : 
+            `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="var(--danger)" stroke-width="2" style="margin-right:4px;"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>`;
+
+        li.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="color: var(--text-main); font-size: 0.95rem;">${log.symbol}</strong>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">${dateStr}</span>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-light); display: flex; align-items: center;">
+                ${icon} Triggered at <strong>${formatINR(log.triggeredPrice)}</strong> (Target: ${log.condition} ${formatINR(log.targetPrice)})
+            </div>
+        `;
+        alertHistoryList.appendChild(li);
+    });
+}
+
+function addAlertHistoryRecord(symbol, triggeredPrice, condition, targetPrice) {
+    alertHistoryLogs.push({
+        symbol,
+        triggeredPrice,
+        condition,
+        targetPrice,
+        timestamp: Date.now()
+    });
+    // Keep only last 50 alerts
+    if (alertHistoryLogs.length > 50) alertHistoryLogs.shift();
+    localStorage.setItem('alertHistoryLogs', JSON.stringify(alertHistoryLogs));
+    
+    // Refresh UI if alerts view is active
+    if (document.getElementById('view-alerts').classList.contains('active')) {
+        renderAlertHistory(alertHistorySearch ? alertHistorySearch.value : '');
+    }
+}
+
+if (alertHistorySearch) {
+    alertHistorySearch.addEventListener('input', (e) => {
+        renderAlertHistory(e.target.value);
+    });
+}
+
+// 3. Marquee Ticker Logic
+async function initMarquee() {
+    const marqueeContainer = document.getElementById('stock-ticker-marquee');
+    if (!marqueeContainer) return;
+    
+    try {
+        const response = await fetch('/api/top10?symbols=^NSEI,^BSESN,^IXIC,^GSPC,^DJI,RELIANCE.NS,TCS.NS,HDFCBANK.NS,AAPL,MSFT,NVDA,GOOG&raw=1');
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = await response.json();
+        
+        marqueeContainer.innerHTML = '';
+        
+        if (data && data.length > 0) {
+            // Create ticker items
+            const itemsHTML = data.map(item => {
+                const isPositive = item.change >= 0;
+                const changeClass = isPositive ? 'positive' : 'negative';
+                const prefix = isPositive ? '+' : '';
+                return `
+                    <div class="ticker-item">
+                        <span class="ticker-symbol">${item.symbol.replace('.NS', '')}</span>
+                        <span class="ticker-price">${item.currency === 'INR' ? '₹' : '$'}${item.price.toFixed(2)}</span>
+                        <span class="ticker-change ${changeClass}">${prefix}${item.change.toFixed(2)} (${prefix}${item.percent_change.toFixed(2)}%)</span>
+                    </div>
+                `;
+            }).join('');
+            
+            // Duplicate the items twice to ensure seamless scrolling loop
+            marqueeContainer.innerHTML = itemsHTML + itemsHTML + itemsHTML;
+        } else {
+            marqueeContainer.innerHTML = '<span style="color: var(--text-muted); padding: 0 20px;">Market data unavailable</span>';
+        }
+    } catch (e) {
+        console.error("Failed to load marquee data:", e);
+        marqueeContainer.innerHTML = '<span style="color: var(--text-muted); padding: 0 20px;">Live market data offline</span>';
+    }
+}
+
+// Call on startup
+document.addEventListener('DOMContentLoaded', () => {
+    initMarquee();
+    renderAlertHistory();
+    // Refresh marquee every 60 seconds
+    setInterval(initMarquee, 60000);
+});
