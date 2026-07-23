@@ -120,6 +120,23 @@ function initChart() {
                             return `₹ ${context.parsed.y.toFixed(2)}`;
                         }
                     }
+                },
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        threshold: 10
+                    },
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                            speed: 0.1
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'x'
+                    }
                 }
             },
             scales: {
@@ -160,6 +177,13 @@ function initChart() {
                 }
             },
             interaction: { mode: 'nearest', axis: 'x', intersect: false }
+        }
+    });
+
+    // Reset zoom on double click
+    ctx.canvas.addEventListener('dblclick', () => {
+        if (stockChart && typeof stockChart.resetZoom === 'function') {
+            stockChart.resetZoom();
         }
     });
 }
@@ -328,6 +352,9 @@ function updateDashboardUI(symbol, name, price, changeVal, changePct) {
 
 function updateChart(labels, data, isPositive) {
     if (!stockChart) return;
+    if (typeof stockChart.resetZoom === 'function') {
+        stockChart.resetZoom('none');
+    }
     stockChart.data.labels = labels;
     stockChart.data.datasets[0].data = data;
     
