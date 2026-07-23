@@ -34,6 +34,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path><path d="M16 12L12 8l-4 4"></path></svg>
                     AI Predict
                 </a>
+                <a href="#" class="nav-item" data-target="view-trade">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    Buy / Sell
+                </a>
             </nav>
             
             <div class="sidebar-footer">
@@ -121,6 +125,12 @@
                                     <svg id="trend-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
                                     <span id="change-percent">--%</span>
                                 </div>
+                                <button id="dash-buy-btn" class="trade-action-btn buy-btn hidden">
+                                    Buy
+                                </button>
+                                <button id="dash-sell-btn" class="trade-action-btn sell-btn hidden">
+                                    Sell
+                                </button>
                             </div>
                             <p class="last-updated" id="last-updated">Last updated: Just now</p>
                         </div>
@@ -279,6 +289,119 @@
                             <p>Projected 24H Target: <strong id="ai-target">₹ --</strong></p>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Buy / Sell View -->
+            <div id="view-trade" class="view-section">
+                <div class="trade-container">
+                    
+                    <!-- Left: Trade Executer & Balance -->
+                    <div class="trade-panel-left">
+                        <!-- Portfolio Summary Card -->
+                        <div class="card balance-card glass-panel">
+                            <h4>Simulated Portfolio</h4>
+                            <div class="balance-metrics">
+                                <div class="metric-box">
+                                    <span class="box-label">Portfolio Value</span>
+                                    <span class="box-val" id="portfolio-value">₹10,00,000.00</span>
+                                </div>
+                                <div class="metric-box">
+                                    <span class="box-label">Available Cash</span>
+                                    <span class="box-val" id="portfolio-cash">₹10,00,000.00</span>
+                                </div>
+                                <div class="metric-box">
+                                    <span class="box-label">Total P&L</span>
+                                    <span class="box-val positive" id="portfolio-pnl">₹0.00 (0.00%)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trade Execution Card -->
+                        <div class="card execute-card glass-panel">
+                            <div class="card-header">
+                                <h3>New Order</h3>
+                            </div>
+                            
+                            <div class="trade-action-selector">
+                                <button class="action-btn buy active" id="btn-action-buy">BUY</button>
+                                <button class="action-btn sell" id="btn-action-sell">SELL</button>
+                            </div>
+
+                            <form id="trade-form" onsubmit="return false;">
+                                <div class="input-group">
+                                    <label for="trade-symbol">Stock Ticker</label>
+                                    <input type="text" id="trade-symbol" placeholder="e.g. AAPL" readonly>
+                                </div>
+                                <div class="input-group">
+                                    <label for="trade-price">Execution Price</label>
+                                    <input type="text" id="trade-price" value="₹0.00" readonly>
+                                </div>
+                                <div class="input-group" style="display: flex; flex-direction: column;">
+                                    <label for="trade-quantity">Quantity</label>
+                                    <input type="number" id="trade-quantity" min="1" placeholder="Enter quantity" required style="width: 100%; box-sizing: border-box;">
+                                    <div class="percent-shortcuts">
+                                        <button type="button" class="pct-btn" data-pct="25">25%</button>
+                                        <button type="button" class="pct-btn" data-pct="50">50%</button>
+                                        <button type="button" class="pct-btn" data-pct="75">75%</button>
+                                        <button type="button" class="pct-btn" data-pct="100">100%</button>
+                                    </div>
+                                </div>
+
+                                <div class="trade-summary">
+                                    <div class="summary-row">
+                                        <span>Estimated Cost</span>
+                                        <span id="estimated-cost">₹0.00</span>
+                                    </div>
+                                </div>
+
+                                <button type="button" class="confirm-trade-btn buy" id="execute-trade-btn">
+                                    Confirm Purchase
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Right: Current Positions & History -->
+                    <div class="trade-panel-right">
+                        <!-- Open Positions Card -->
+                        <div class="card positions-card glass-panel" style="flex: 1; display: flex; flex-direction: column;">
+                            <div class="card-header">
+                                <h3>Open Positions</h3>
+                            </div>
+                            <div class="positions-table-wrapper" style="flex: 1; overflow-y: auto;">
+                                <table class="trade-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Ticker</th>
+                                            <th>Shares</th>
+                                            <th>Avg Price</th>
+                                            <th>Value</th>
+                                            <th>P&L</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="positions-list">
+                                        <tr>
+                                            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">No open positions</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Order History Card -->
+                        <div class="card order-history-card glass-panel" style="max-height: 300px; display: flex; flex-direction: column;">
+                            <div class="card-header">
+                                <h3>Transaction Log</h3>
+                            </div>
+                            <div class="history-list-wrapper" style="flex: 1; overflow-y: auto;">
+                                <ul class="history-list" id="trade-history-list">
+                                    <li style="text-align: center; color: var(--text-muted); padding: 15px;">No transactions recorded</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 

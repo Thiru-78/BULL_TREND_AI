@@ -9,6 +9,8 @@ const changePercentEl = document.getElementById('change-percent');
 const lastUpdatedEl = document.getElementById('last-updated');
 const trendIconEl = document.getElementById('trend-icon');
 const chartLoader = document.getElementById('chart-loader');
+const dashBuyBtn = document.getElementById('dash-buy-btn');
+const dashSellBtn = document.getElementById('dash-sell-btn');
 
 // Top 10 Elements
 const top10ListEl = document.getElementById('top10-list');
@@ -145,11 +147,15 @@ async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad 
             throw new Error('Could not connect to backend server');
         }
 
+        currentSymbol = data.symbol;
         currentPrice = parseFloat(data.price);
         previousClose = parseFloat(data.prevClose);
         
         const changeValue = currentPrice - previousClose;
         const changePercent = (changeValue / previousClose) * 100;
+        
+        if (dashBuyBtn) dashBuyBtn.classList.remove('hidden');
+        if (dashSellBtn) dashSellBtn.classList.remove('hidden');
         
         updateDashboardUI(data.symbol.replace('.NS', ''), data.name, currentPrice, changeValue, changePercent);
         
@@ -390,6 +396,11 @@ document.querySelectorAll('.nav-item').forEach(item => {
         // Show target view
         const targetId = item.getAttribute('data-target');
         document.getElementById(targetId).classList.add('active');
+        
+        if (targetId === 'view-trade') {
+            populateTradeForm();
+            updateTradeUI();
+        }
     });
 });
 
@@ -1575,4 +1586,377 @@ document.addEventListener('DOMContentLoaded', () => {
         showAuthScreen('selection');
         updateEmailAlertUI();
     }
+
+    // Initialize Simulated Trading
+    loadTradingState();
+    initTradingSimulator();
+    initDashboardTradeTriggers();
 });
+
+// --- SIMULATED TRADING ENGINE ---
+let tradingState = {
+    cash: 1000000.0, // 10 Lakhs starting cash
+    positions: {},  // e.g. { "AAPL": { shares: 10, avgPrice: 150.0 } }
+    history: []     // e.g. [{ type: "buy", symbol: "AAPL", shares: 10, price: 150.0, time: "DateString" }]
+};
+
+// Load trading state from localStorage if it exists
+function loadTradingState() {
+    const saved = localStorage.getItem('bt_trading_state');
+    if (saved) {
+        try {
+            tradingState = JSON.parse(saved);
+        } catch(e) {
+            console.error("Failed to parse saved trade state:", e);
+        }
+    }
+    updateTradeUI();
+}
+
+// Save trading state
+function saveTradingState() {
+    localStorage.setItem('bt_trading_state', JSON.stringify(tradingState));
+    updateTradeUI();
+}
+
+// Calculate totals and update the UI
+function updateTradeUI() {
+    // Available Cash
+    const cashEl = document.getElementById('portfolio-cash');
+    if (cashEl) cashEl.textContent = formatINR(tradingState.cash);
+
+    // Calculate Portfolio Value
+    let positionsValue = 0;
+    let totalInvested = 0;
+    
+    const positionsList = document.getElementById('positions-list');
+    if (positionsList) {
+        positionsList.innerHTML = '';
+        
+        const symbols = Object.keys(tradingState.positions);
+        if (symbols.length === 0) {
+            positionsList.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">No open positions</td>
+                </tr>
+            `;
+        } else {
+            symbols.forEach(sym => {
+                const pos = tradingState.positions[sym];
+                if (pos.shares <= 0) return;
+                
+                // Fetch current price (use live price if matching currentSymbol, fallback to avgPrice)
+                let livePrice = pos.avgPrice;
+                const activeSym = currentSymbol ? currentSymbol.replace('.NS', '').replace('.BO', '').toUpperCase() : '';
+                if (activeSym === sym.toUpperCase()) {
+                    livePrice = currentPrice;
+                }
+                
+                const curVal = pos.shares * livePrice;
+                positionsValue += curVal;
+                totalInvested += pos.shares * pos.avgPrice;
+                
+                const pnl = curVal - (pos.shares * pos.avgPrice);
+                const pnlPct = pos.avgPrice > 0 ? (pnl / (pos.shares * pos.avgPrice) * 100) : 0.0;
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${sym}</strong></td>
+                    <td>${pos.shares}</td>
+                    <td>${formatINR(pos.avgPrice)}</td>
+                    <td>${formatINR(curVal)}</td>
+                    <td class="trade-pnl ${pnl >= 0 ? 'positive' : 'negative'}">
+                        ${pnl >= 0 ? '+' : ''}${formatINR(pnl)} (${pnlPct.toFixed(2)}%)
+                    </td>
+                `;
+                positionsList.appendChild(tr);
+            });
+        }
+    } else {
+        Object.keys(tradingState.positions).forEach(sym => {
+            const pos = tradingState.positions[sym];
+            let livePrice = pos.avgPrice;
+            const activeSym = currentSymbol ? currentSymbol.replace('.NS', '').replace('.BO', '').toUpperCase() : '';
+            if (activeSym === sym.toUpperCase()) {
+                livePrice = currentPrice;
+            }
+            positionsValue += pos.shares * livePrice;
+            totalInvested += pos.shares * pos.avgPrice;
+        });
+    }
+
+    const totalPortfolio = tradingState.cash + positionsValue;
+    const portfolioValueEl = document.getElementById('portfolio-value');
+    if (portfolioValueEl) portfolioValueEl.textContent = formatINR(totalPortfolio);
+
+    const totalPnl = totalPortfolio - 1000000.0;
+    const totalPnlPct = (totalPnl / 1000000.0) * 100;
+    
+    const pnlEl = document.getElementById('portfolio-pnl');
+    if (pnlEl) {
+        pnlEl.textContent = `${totalPnl >= 0 ? '+' : ''}${formatINR(totalPnl)} (${totalPnlPct.toFixed(2)}%)`;
+        pnlEl.className = `box-val ${totalPnl >= 0 ? 'positive' : 'negative'}`;
+    }
+
+    // Update Transaction History
+    const historyList = document.getElementById('trade-history-list');
+    if (historyList) {
+        historyList.innerHTML = '';
+        if (tradingState.history.length === 0) {
+            historyList.innerHTML = `<li style="text-align: center; color: var(--text-muted); padding: 15px;">No transactions recorded</li>`;
+        } else {
+            const recent = [...tradingState.history].reverse().slice(0, 10);
+            recent.forEach(tx => {
+                const li = document.createElement('li');
+                li.className = 'history-item';
+                li.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="history-type-tag ${tx.type}">${tx.type}</span>
+                        <strong>${tx.symbol}</strong>
+                    </div>
+                    <div>${tx.shares} @ ${formatINR(tx.price)}</div>
+                    <div style="color:var(--text-muted); font-size:0.75rem;">${tx.time}</div>
+                `;
+                historyList.appendChild(li);
+            });
+        }
+    }
+}
+
+// Bind Simulator Button triggers
+let selectedTradeAction = 'buy'; // default
+
+function initTradingSimulator() {
+    const buyActionBtn = document.getElementById('btn-action-buy');
+    const sellActionBtn = document.getElementById('btn-action-sell');
+    const executeBtn = document.getElementById('execute-trade-btn');
+    const qtyInput = document.getElementById('trade-quantity');
+    const estCostEl = document.getElementById('estimated-cost');
+    
+    if (!buyActionBtn || !sellActionBtn) return;
+    
+    buyActionBtn.addEventListener('click', () => {
+        selectedTradeAction = 'buy';
+        buyActionBtn.classList.add('active');
+        sellActionBtn.classList.remove('active');
+        executeBtn.className = 'confirm-trade-btn buy';
+        executeBtn.textContent = 'Confirm Purchase';
+        document.querySelector('.trade-summary .summary-row span:first-child').textContent = 'Estimated Cost';
+        recalcEstCost();
+    });
+
+    sellActionBtn.addEventListener('click', () => {
+        selectedTradeAction = 'sell';
+        sellActionBtn.classList.add('active');
+        buyActionBtn.classList.remove('active');
+        executeBtn.className = 'confirm-trade-btn sell';
+        executeBtn.textContent = 'Confirm Sale';
+        document.querySelector('.trade-summary .summary-row span:first-child').textContent = 'Estimated Revenue';
+        recalcEstCost();
+    });
+
+    qtyInput.addEventListener('input', recalcEstCost);
+    qtyInput.addEventListener('change', recalcEstCost);
+
+    // Percentage shortcuts
+    document.querySelectorAll('.pct-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const pct = parseInt(e.target.getAttribute('data-pct'));
+            if (!currentPrice || currentPrice <= 0) return;
+            
+            if (selectedTradeAction === 'buy') {
+                const maxBuyCash = tradingState.cash * (pct / 100);
+                const qty = Math.floor(maxBuyCash / currentPrice);
+                qtyInput.value = qty > 0 ? qty : '';
+            } else {
+                const sym = currentSymbol ? currentSymbol.replace('.NS', '').replace('.BO', '').toUpperCase() : '';
+                const pos = tradingState.positions[sym];
+                const ownedShares = pos ? pos.shares : 0;
+                const qty = Math.floor(ownedShares * (pct / 100));
+                qtyInput.value = qty > 0 ? qty : '';
+            }
+            recalcEstCost();
+        });
+    });
+
+    // Execute order
+    executeBtn.addEventListener('click', () => {
+        const symbol = document.getElementById('trade-symbol').value;
+        const qty = parseInt(qtyInput.value);
+        
+        if (!symbol || !currentPrice || currentPrice <= 0) {
+            showToast('Please select a valid stock first.', 'error');
+            return;
+        }
+        
+        if (isNaN(qty) || qty <= 0) {
+            showToast('Please enter a valid positive quantity.', 'error');
+            return;
+        }
+
+        const cost = qty * currentPrice;
+        const symKey = symbol.toUpperCase();
+
+        if (selectedTradeAction === 'buy') {
+            if (cost > tradingState.cash) {
+                showToast('Insufficient funds to complete purchase.', 'error');
+                return;
+            }
+            
+            tradingState.cash -= cost;
+            
+            if (!tradingState.positions[symKey]) {
+                tradingState.positions[symKey] = { shares: 0, avgPrice: 0.0 };
+            }
+            
+            const pos = tradingState.positions[symKey];
+            const oldCost = pos.shares * pos.avgPrice;
+            pos.shares += qty;
+            pos.avgPrice = (oldCost + cost) / pos.shares;
+            
+            tradingState.history.push({
+                type: 'buy',
+                symbol: symKey,
+                shares: qty,
+                price: currentPrice,
+                time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN')
+            });
+            
+            showToast(`Purchased ${qty} shares of ${symKey} successfully!`, 'success');
+            
+        } else {
+            const pos = tradingState.positions[symKey];
+            const ownedShares = pos ? pos.shares : 0;
+            
+            if (qty > ownedShares) {
+                showToast(`You only own ${ownedShares} shares. Cannot sell ${qty} shares.`, 'error');
+                return;
+            }
+            
+            tradingState.cash += cost;
+            pos.shares -= qty;
+            if (pos.shares === 0) {
+                delete tradingState.positions[symKey];
+            }
+            
+            tradingState.history.push({
+                type: 'sell',
+                symbol: symKey,
+                shares: qty,
+                price: currentPrice,
+                time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN')
+            });
+            
+            showToast(`Sold ${qty} shares of ${symKey} successfully!`, 'success');
+        }
+        
+        qtyInput.value = '';
+        recalcEstCost();
+        saveTradingState();
+    });
+}
+
+function recalcEstCost() {
+    const qtyInput = document.getElementById('trade-quantity');
+    const estCostEl = document.getElementById('estimated-cost');
+    if (!qtyInput || !estCostEl) return;
+    
+    const qty = parseInt(qtyInput.value);
+    if (isNaN(qty) || qty <= 0 || !currentPrice || currentPrice <= 0) {
+        estCostEl.textContent = '₹0.00';
+    } else {
+        estCostEl.textContent = formatINR(qty * currentPrice);
+    }
+}
+
+// Populate the trade order form with the active stock info
+function populateTradeForm() {
+    const symbolField = document.getElementById('trade-symbol');
+    const priceField = document.getElementById('trade-price');
+    const executeBtn = document.getElementById('execute-trade-btn');
+    
+    if (!symbolField || !priceField) return;
+    
+    if (currentSymbol) {
+        const cleanSym = currentSymbol.replace('.NS', '').replace('.BO', '');
+        symbolField.value = cleanSym;
+        priceField.value = formatINR(currentPrice);
+        
+        if (executeBtn) {
+            executeBtn.disabled = false;
+        }
+    } else {
+        symbolField.value = '';
+        priceField.value = '₹0.00';
+        if (executeBtn) {
+            executeBtn.disabled = true;
+        }
+    }
+    recalcEstCost();
+}
+
+// Bind dashboard button click listeners
+function initDashboardTradeTriggers() {
+    const dashBuyBtn = document.getElementById('dash-buy-btn');
+    const dashSellBtn = document.getElementById('dash-sell-btn');
+    
+    if (dashBuyBtn) {
+        dashBuyBtn.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            const tradeTab = document.querySelector('[data-target="view-trade"]');
+            if (tradeTab) tradeTab.classList.add('active');
+            
+            document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
+            const tradeView = document.getElementById('view-trade');
+            if (tradeView) tradeView.classList.add('active');
+            
+            selectedTradeAction = 'buy';
+            const buyActionBtn = document.getElementById('btn-action-buy');
+            const sellActionBtn = document.getElementById('btn-action-sell');
+            const executeBtn = document.getElementById('execute-trade-btn');
+            if (buyActionBtn && sellActionBtn && executeBtn) {
+                buyActionBtn.classList.add('active');
+                sellActionBtn.classList.remove('active');
+                executeBtn.className = 'confirm-trade-btn buy';
+                executeBtn.textContent = 'Confirm Purchase';
+                document.querySelector('.trade-summary .summary-row span:first-child').textContent = 'Estimated Cost';
+            }
+            
+            populateTradeForm();
+            updateTradeUI();
+            
+            const qtyInput = document.getElementById('trade-quantity');
+            if (qtyInput) qtyInput.focus();
+        });
+    }
+
+    if (dashSellBtn) {
+        dashSellBtn.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            const tradeTab = document.querySelector('[data-target="view-trade"]');
+            if (tradeTab) tradeTab.classList.add('active');
+            
+            document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
+            const tradeView = document.getElementById('view-trade');
+            if (tradeView) tradeView.classList.add('active');
+            
+            selectedTradeAction = 'sell';
+            const buyActionBtn = document.getElementById('btn-action-buy');
+            const sellActionBtn = document.getElementById('btn-action-sell');
+            const executeBtn = document.getElementById('execute-trade-btn');
+            if (buyActionBtn && sellActionBtn && executeBtn) {
+                sellActionBtn.classList.add('active');
+                buyActionBtn.classList.remove('active');
+                executeBtn.className = 'confirm-trade-btn sell';
+                executeBtn.textContent = 'Confirm Sale';
+                document.querySelector('.trade-summary .summary-row span:first-child').textContent = 'Estimated Revenue';
+            }
+            
+            populateTradeForm();
+            updateTradeUI();
+            
+            const qtyInput = document.getElementById('trade-quantity');
+            if (qtyInput) qtyInput.focus();
+        });
+    }
+}

@@ -1176,6 +1176,282 @@ body {
     }
 }
 
+/* Trade View Styles */
+.trade-container {
+    display: flex;
+    gap: 24px;
+    height: 100%;
+}
+.trade-panel-left {
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+}
+.trade-panel-right {
+    flex: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+}
+
+/* Balance Card */
+.balance-card h4 {
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+.balance-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+.metric-box {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.box-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.box-val {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.box-val.positive {
+    color: var(--success);
+}
+.box-val.negative {
+    color: var(--danger);
+}
+
+/* Execute Order Card */
+.trade-action-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 20px;
+}
+.action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 10px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif;
+    transition: all 0.2s;
+}
+.action-btn.buy.active {
+    background: var(--success);
+    color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+.action-btn.sell.active {
+    background: var(--danger);
+    color: white;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+#trade-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+#trade-form label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+#trade-form input {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--panel-border);
+    color: var(--text-primary);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: 'Outfit', sans-serif;
+}
+#trade-form input[readonly] {
+    opacity: 0.8;
+    background: rgba(255, 255, 255, 0.01);
+}
+.percent-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+}
+.pct-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--panel-border);
+    color: var(--text-muted);
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.pct-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+.trade-summary {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.05);
+}
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.confirm-trade-btn {
+    border: none;
+    padding: 14px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 1rem;
+    font-family: 'Space Grotesk', sans-serif;
+    color: white;
+    transition: all 0.2s;
+    margin-top: 8px;
+}
+.confirm-trade-btn.buy {
+    background: var(--success);
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+.confirm-trade-btn.sell {
+    background: var(--danger);
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+/* Positions Table */
+.positions-table-wrapper {
+    overflow-x: auto;
+}
+.trade-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    text-align: left;
+}
+.trade-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.trade-table td {
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    vertical-align: middle;
+}
+.trade-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.trade-pnl.positive {
+    color: var(--success);
+    font-weight: 600;
+}
+.trade-pnl.negative {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+/* Order History List */
+.history-list-wrapper {
+    max-height: 250px;
+    overflow-y: auto;
+}
+.history-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+.history-type-tag {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+.history-type-tag.buy {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+}
+.history-type-tag.sell {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}
+
+/* Dashboard Trade Button Styles */
+.trade-action-btn {
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: 'Space Grotesk', sans-serif;
+    color: white;
+    transition: all 0.2s;
+    margin-left: 8px;
+}
+.trade-action-btn.buy-btn {
+    background: rgba(16, 185, 129, 0.25);
+    border: 1px solid var(--success);
+    color: #34d399;
+}
+.trade-action-btn.buy-btn:hover {
+    background: var(--success);
+    color: white;
+}
+.trade-action-btn.sell-btn {
+    background: rgba(239, 68, 68, 0.25);
+    border: 1px solid var(--danger);
+    color: #f87171;
+}
+.trade-action-btn.sell-btn:hover {
+    background: var(--danger);
+    color: white;
+}
+
+@media (max-width: 900px) {
+    .trade-container {
+        flex-direction: column;
+    }
+}
+
 
 
 
