@@ -354,12 +354,13 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                         import smtplib
                         from email.mime.text import MIMEText
                         from email.mime.multipart import MIMEMultipart
+                        from email.header import Header
                         
                         msg = MIMEMultipart()
                         msg['From'] = smtp_user
                         msg['To'] = to_addr
-                        msg['Subject'] = subject
-                        msg.attach(MIMEText(message, 'plain'))
+                        msg['Subject'] = Header(subject, 'utf-8')
+                        msg.attach(MIMEText(message, 'plain', 'utf-8'))
                         
                         # Set up connection
                         server = smtplib.SMTP(smtp_server, smtp_port)
@@ -379,7 +380,11 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     print(f"[MOCK EMAIL GATEWAY] Sending Alert Email", flush=True)
                     print(f"   To:      {to_addr}", flush=True)
                     print(f"   Subject: {subject}", flush=True)
-                    print(f"   Message: {message}", flush=True)
+                    try:
+                        print(f"   Message: {message}", flush=True)
+                    except UnicodeEncodeError:
+                        safe_msg = message.encode('ascii', errors='replace').decode('ascii')
+                        print(f"   Message: {safe_msg}", flush=True)
                     print("--------------------------------------------------------------------------", flush=True)
                     print("   [TIP] Setup environment variables to send real emails locally:", flush=True)
                     print("      set SMTP_SERVER=smtp.gmail.com", flush=True)
