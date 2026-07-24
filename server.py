@@ -388,7 +388,21 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     # Ensure working directory is the folder where server.py lives
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    
+    # Fix Windows registry MIME type corruption
+    import mimetypes
+    mimetypes.init()
+    mimetypes.add_type('text/css', '.css')
+    mimetypes.add_type('application/javascript', '.js')
+    mimetypes.add_type('image/svg+xml', '.svg')
+    
     handler = StockProxyHandler
+    handler.extensions_map.update({
+        '.css': 'text/css',
+        '.js': 'application/javascript',
+        '.svg': 'image/svg+xml'
+    })
+    
     # Allow port reuse to avoid 'Address already in use' errors on quick restarts
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     with socketserver.ThreadingTCPServer(("", PORT), handler) as httpd:
