@@ -79,8 +79,8 @@ function initChart() {
     }
     const ctx = document.getElementById('stockChart').getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+    gradient.addColorStop(0, 'rgba(159, 122, 234, 0.5)');
+    gradient.addColorStop(1, 'rgba(159, 122, 234, 0.0)');
 
     stockChart = new Chart(ctx, {
         type: 'line',
@@ -89,7 +89,7 @@ function initChart() {
             datasets: [{
                 label: 'Price (₹)',
                 data: [],
-                borderColor: '#3b82f6',
+                borderColor: '#9f7aea',
                 borderWidth: 2,
                 backgroundColor: gradient,
                 fill: true,
@@ -97,7 +97,7 @@ function initChart() {
                 pointRadius: 0,
                 pointHoverRadius: 6,
                 pointHoverBackgroundColor: '#fff',
-                pointHoverBorderColor: '#3b82f6',
+                pointHoverBorderColor: '#9f7aea',
                 pointHoverBorderWidth: 2
             }]
         },
@@ -436,15 +436,15 @@ function updateChart(labels, data, isPositive, currency = 'INR') {
         return `${symbolChar} ${value}`;
     };
     
-    const color = isPositive ? '#10b981' : '#ef4444';
+    const color = isPositive ? '#00e699' : '#ef4444';
     const ctx = document.getElementById('stockChart').getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
     
     if (isPositive) {
-        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.5)');
-        gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+        gradient.addColorStop(0, 'rgba(0, 230, 153, 0.4)');
+        gradient.addColorStop(1, 'rgba(0, 230, 153, 0.0)');
     } else {
-        gradient.addColorStop(0, 'rgba(239, 68, 68, 0.5)');
+        gradient.addColorStop(0, 'rgba(239, 68, 68, 0.4)');
         gradient.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
     }
     
