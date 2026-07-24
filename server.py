@@ -343,6 +343,48 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json({"error": "Missing recipient email address ('to')"}, 400)
                     return
                 
+                # Check Resend API first (bypasses port blocking)
+                resend_api_key = os.environ.get('RESEND_API_KEY', 're_RcTptMHS_KwvT8v4KHzHfSgobJ6ngdR53')
+                if resend_api_key:
+                    try:
+                        resend_url = "https://api.resend.com/emails"
+                        payload = {
+                            "from": "Bull Trend AI <onboarding@resend.dev>",
+                            "to": to_addr,
+                            "subject": subject,
+                            "text": message
+                        }
+                        req_data = json.dumps(payload).encode('utf-8')
+                        req = urllib.request.Request(
+                            resend_url,
+                            data=req_data,
+                            headers={
+                                "Authorization": f"Bearer {resend_api_key}",
+                                "Content-Type": "application/json"
+                            },
+                            method="POST"
+                        )
+                        with urllib.request.urlopen(req) as res:
+                            res_body = json.loads(res.read().decode('utf-8'))
+                            print(f"[Resend API] Email successfully sent: {res_body}", flush=True)
+                        self.send_json({"success": True, "simulated": False})
+                        return
+                    except Exception as err:
+                        err_msg = str(err)
+                        if hasattr(err, 'read'):
+                            try:
+                                err_msg = err.read().decode('utf-8')
+                            except Exception:
+                                pass
+                        print(f"[Resend API Error] Failed to send email to {to_addr}: {err_msg}", flush=True)
+                        # If no SMTP fallback exists, return the error now
+                        smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+                        smtp_user = os.environ.get('SMTP_USER', 'mr78raj18@gmail.com')
+                        smtp_password = os.environ.get('SMTP_PASSWORD', 'kmjgsvdxuyybctmb')
+                        if not (smtp_server and smtp_user and smtp_password):
+                            self.send_json({"success": False, "error": f"Resend API Error: {err_msg}"}, 500)
+                            return
+
                 smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
                 smtp_port = int(os.environ.get('SMTP_PORT', '587'))
                 smtp_user = os.environ.get('SMTP_USER', 'mr78raj18@gmail.com')
