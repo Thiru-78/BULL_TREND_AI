@@ -306,16 +306,14 @@ async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad 
             symbolInput.value = '';
         }
         
-        if (!isBackgroundUpdate) {
-            currentChartRange = '2y';
-            document.querySelectorAll('.filter-btn').forEach(b => {
-                if (b.getAttribute('data-range') === '2y') {
-                    b.classList.add('active');
-                } else {
-                    b.classList.remove('active');
-                }
-            });
-        }
+        // Ensure the correct filter button is marked active
+        document.querySelectorAll('.filter-btn').forEach(b => {
+            if (b.getAttribute('data-range') === currentChartRange) {
+                b.classList.add('active');
+            } else {
+                b.classList.remove('active');
+            }
+        });
         
         if (data.prices && data.prices.length > 0) {
             const filteredData = filterChartDataByRange(data.labels, data.prices, currentChartRange);
@@ -921,6 +919,7 @@ searchBtn.addEventListener('click', () => {
     if (val) {
         currentSymbol = val;
         suggestionsBox.classList.add('hidden');
+        currentChartRange = '2y'; // Reset to default 2y range on new search
         fetchStockData(currentSymbol);
     }
 });
@@ -1076,6 +1075,7 @@ function enterDashboard(mode, username = '') {
     if (!appInitialized) {
         appInitialized = true;
         initChart();
+        currentChartRange = '2y'; // Set default 2y range on initial load
         fetchStockData(currentSymbol, false, true);
         loadTop10();
         
