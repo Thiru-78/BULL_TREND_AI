@@ -343,10 +343,10 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json({"error": "Missing recipient email address ('to')"}, 400)
                     return
                 
-                smtp_server = os.environ.get('SMTP_SERVER', '')
+                smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
                 smtp_port = int(os.environ.get('SMTP_PORT', '587'))
-                smtp_user = os.environ.get('SMTP_USER', '')
-                smtp_password = os.environ.get('SMTP_PASSWORD', '')
+                smtp_user = os.environ.get('SMTP_USER', 'mr78raj18@gmail.com')
+                smtp_password = os.environ.get('SMTP_PASSWORD', 'kmjgsvdxuyybctmb')
                 
                 # Check if real SMTP credentials are set
                 if smtp_server and smtp_user and smtp_password:
