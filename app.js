@@ -1221,8 +1221,13 @@ function showAuthScreen(screenId) {
 function enterDashboard(mode, name = '', username = '') {
     authOverlay.classList.add('hidden');
     
-    headerAuthButtons.classList.add('hidden');
-    headerUserProfile.classList.remove('hidden');
+    if (mode === 'guest') {
+        headerAuthButtons.classList.remove('hidden');
+        headerUserProfile.classList.add('hidden');
+    } else {
+        headerAuthButtons.classList.add('hidden');
+        headerUserProfile.classList.remove('hidden');
+    }
     
     // Perform initial profile UI update
     updateProfileUI();
