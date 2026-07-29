@@ -9,6 +9,25 @@ import concurrent.futures
 import time
 import yfinance as yf
 
+# Load environment variables manually to maintain zero external dependencies
+def load_dotenv():
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, val = line.split('=', 1)
+                    val = val.strip()
+                    if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                        val = val[1:-1]
+                    os.environ[key.strip()] = val
+
+load_dotenv()
+
+import stripe
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+
 INFO_CACHE = {}
 SEARCH_RESULT_CACHE = {}
 CACHE_DURATION = 300
@@ -45,6 +64,113 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
         else:
             # Serve static files from the current folder (index.html, app.js, style.css, logo.png, etc.)
             super().do_GET()
+
+    def do_POST(self):
+        parsed_url = urllib.parse.urlparse(self.path)
+        path = parsed_url.path
+        
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_data = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else ""
+        
+        if path == '/api/create-checkout-session':
+            self.handle_create_checkout_session(post_data)
+        elif path == '/api/verify-checkout-session':
+            self.handle_verify_checkout_session(post_data)
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b"Not Found")
+            
+    def handle_create_checkout_session(self, post_data):
+        try:
+            req_data = json.loads(post_data) if post_data else {}
+            symbol = req_data.get('symbol', 'UNKNOWN')
+            quantity = int(req_data.get('quantity', 1))
+            price = float(req_data.get('price', 0.0))
+            amount_in_paise = int(round(quantity * price * 100))
+            
+            if amount_in_paise <= 0:
+                raise Exception("Invalid transaction amount.")
+
+            if not stripe.api_key:
+                stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+                
+            if not stripe.api_key:
+                raise Exception("STRIPE_SECRET_KEY is not configured in .env file.")
+                
+            host = self.headers.get('Host', f'localhost:{PORT}')
+            protocol = 'http' if 'localhost' in host or '127.0.0.1' in host else 'https'
+            base_url = f"{protocol}://{host}"
+            
+            formatted_total = f"INR {quantity * price:,.2f}"
+            
+            session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=[
+                    {
+                        'price_data': {
+                            'currency': 'inr',
+                            'product_data': {
+                                'name': f"Buy {quantity} shares of {symbol}",
+                                'description': f"Dynamic stock transaction in test mode. Rate: INR {price:,.2f}/share. Total: {formatted_total}.",
+                            },
+                            'unit_amount': amount_in_paise,
+                        },
+                        'quantity': 1,
+                    },
+                ],
+                mode='payment',
+                metadata={
+                    'symbol': symbol,
+                    'quantity': str(quantity),
+                    'price': str(price),
+                    'type': 'buy'
+                },
+                success_url=f"{base_url}/?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{base_url}/?payment=cancel",
+            )
+            
+            self.send_json({
+                "success": True,
+                "url": session.url
+            })
+        except Exception as e:
+            print(f"[Stripe Backend Error] Failed to create checkout session: {e}", flush=True)
+            self.send_json({
+                "success": False,
+                "error": str(e)
+            }, status=500)
+
+    def handle_verify_checkout_session(self, post_data):
+        try:
+            req_data = json.loads(post_data) if post_data else {}
+            session_id = req_data.get('session_id')
+            
+            if not session_id:
+                raise Exception("Missing session_id parameter.")
+
+            if not stripe.api_key:
+                stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+
+            session = stripe.checkout.Session.retrieve(session_id)
+            
+            if session.payment_status == 'paid':
+                self.send_json({
+                    "success": True,
+                    "metadata": session.metadata,
+                    "amount_total": session.amount_total
+                })
+            else:
+                self.send_json({
+                    "success": False,
+                    "error": f"Session status is unpaid (payment_status: {session.payment_status})"
+                })
+        except Exception as e:
+            print(f"[Stripe Backend Error] Failed to verify checkout session {session_id}: {e}", flush=True)
+            self.send_json({
+                "success": False,
+                "error": str(e)
+            }, status=500)
             
     def send_json(self, data, status=200):
         self.send_response(status)
