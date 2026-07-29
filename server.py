@@ -87,9 +87,10 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
             symbol = req_data.get('symbol', 'UNKNOWN')
             quantity = int(req_data.get('quantity', 1))
             price = float(req_data.get('price', 0.0))
-            amount_in_paise = int(round(quantity * price * 100))
+            currency = req_data.get('currency', 'INR').lower()
+            amount_in_cents = int(round(quantity * price * 100))
             
-            if amount_in_paise <= 0:
+            if amount_in_cents <= 0:
                 raise Exception("Invalid transaction amount.")
 
             if not stripe.api_key:
@@ -102,19 +103,20 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
             protocol = 'http' if 'localhost' in host or '127.0.0.1' in host else 'https'
             base_url = f"{protocol}://{host}"
             
-            formatted_total = f"INR {quantity * price:,.2f}"
+            formatted_rate = f"{currency.upper()} {price:,.2f}"
+            formatted_total = f"{currency.upper()} {quantity * price:,.2f}"
             
             session = stripe.checkout.Session.create(
                 payment_method_types=['card'],
                 line_items=[
                     {
                         'price_data': {
-                            'currency': 'inr',
+                            'currency': currency,
                             'product_data': {
                                 'name': f"Buy {quantity} shares of {symbol}",
-                                'description': f"Dynamic stock transaction in test mode. Rate: INR {price:,.2f}/share. Total: {formatted_total}.",
+                                'description': f"Dynamic stock transaction in test mode. Rate: {formatted_rate}/share. Total: {formatted_total}.",
                             },
-                            'unit_amount': amount_in_paise,
+                            'unit_amount': amount_in_cents,
                         },
                         'quantity': 1,
                     },
@@ -124,6 +126,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     'symbol': symbol,
                     'quantity': str(quantity),
                     'price': str(price),
+                    'currency': currency.upper(),
                     'type': 'buy'
                 },
                 success_url=f"{base_url}/?payment=success&session_id={{CHECKOUT_SESSION_ID}}",

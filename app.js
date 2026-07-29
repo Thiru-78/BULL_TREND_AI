@@ -2459,7 +2459,8 @@ function initTradingSimulator() {
         const symKey = symbol.toUpperCase();
 
         if (selectedTradeAction === 'buy') {
-            initiateStripeCheckout(currentSymbol || symKey, qty, currentPrice);
+            const currency = currentStockData ? currentStockData.currency : 'INR';
+            initiateStripeCheckout(currentSymbol || symKey, qty, currentPrice, currency);
             return;
         } else {
             const pos = tradingState.positions[symKey];
@@ -3680,7 +3681,7 @@ function updateWatchlistButtonState(symbol) {
 
 // --- STRIPE BILLING CHECKOUT INTEGRATION ---
 
-async function initiateStripeCheckout(symbol, quantity, price) {
+async function initiateStripeCheckout(symbol, quantity, price, currency = 'INR') {
     try {
         showToast("Opening Stripe billing page...", "info");
         
@@ -3692,7 +3693,8 @@ async function initiateStripeCheckout(symbol, quantity, price) {
             body: JSON.stringify({
                 symbol: symbol,
                 quantity: quantity,
-                price: price
+                price: price,
+                currency: currency
             })
         });
         
@@ -3703,6 +3705,7 @@ async function initiateStripeCheckout(symbol, quantity, price) {
                 symbol: symbol,
                 quantity: quantity,
                 price: price,
+                currency: currency,
                 time: Date.now()
             }));
             window.location.href = data.url;
@@ -3748,11 +3751,14 @@ async function verifyStripeSession() {
                     const symKey = symbol.toUpperCase();
                     
                     // Add position
+                    const currency = metadata.currency || 'INR';
                     if (!tradingState.positions[symKey]) {
-                        tradingState.positions[symKey] = { shares: 0, avgPrice: 0.0 };
+                        tradingState.positions[symKey] = { shares: 0, avgPrice: 0.0, currency: currency };
                     }
                     
                     const pos = tradingState.positions[symKey];
+                    pos.currency = currency;
+                    
                     const oldCost = pos.shares * pos.avgPrice;
                     const cost = quantity * price;
                     
@@ -3765,6 +3771,7 @@ async function verifyStripeSession() {
                         symbol: symKey,
                         shares: quantity,
                         price: price,
+                        currency: currency,
                         time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN') + ' (Stripe)'
                     });
                     

@@ -25,9 +25,10 @@ exports.handler = async (event, context) => {
     const symbol = body.symbol || 'UNKNOWN';
     const quantity = parseInt(body.quantity || 1);
     const price = parseFloat(body.price || 0.0);
-    const amountInPaise = Math.round(quantity * price * 100);
+    const currency = (body.currency || 'INR').toLowerCase();
+    const amountInCents = Math.round(quantity * price * 100);
 
-    if (amountInPaise <= 0) {
+    if (amountInCents <= 0) {
       return {
         statusCode: 400,
         headers,
@@ -39,19 +40,20 @@ exports.handler = async (event, context) => {
     const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
     const baseUrl = `${protocol}://${host}`;
 
-    const formattedTotal = `INR ${(quantity * price).toFixed(2)}`;
+    const formattedRate = `${currency.toUpperCase()} ${price.toFixed(2)}`;
+    const formattedTotal = `${currency.toUpperCase()} ${(quantity * price).toFixed(2)}`;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
-            currency: 'inr',
+            currency: currency,
             product_data: {
               name: `Buy ${quantity} shares of ${symbol}`,
-              description: `Dynamic stock transaction in test mode. Rate: INR ${price.toFixed(2)}/share. Total: {formattedTotal}.`,
+              description: `Dynamic stock transaction in test mode. Rate: ${formattedRate}/share. Total: ${formattedTotal}.`,
             },
-            unit_amount: amountInPaise,
+            unit_amount: amountInCents,
           },
           quantity: 1,
         },
@@ -61,6 +63,7 @@ exports.handler = async (event, context) => {
         symbol: symbol,
         quantity: String(quantity),
         price: String(price),
+        currency: currency.upperCase ? currency.toUpperCase() : currency,
         type: 'buy'
       },
       success_url: `${baseUrl}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
