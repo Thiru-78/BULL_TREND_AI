@@ -2588,10 +2588,11 @@ function recalcEstCost() {
     if (!qtyInput || !estCostEl) return;
 
     const qty = parseInt(qtyInput.value);
+    const currency = currentStockData ? currentStockData.currency : 'INR';
     if (isNaN(qty) || qty <= 0 || !currentPrice || currentPrice <= 0) {
-        estCostEl.textContent = '₹0.00';
+        estCostEl.textContent = formatStockCurrency(0, currency);
     } else {
-        estCostEl.textContent = formatINR(qty * currentPrice);
+        estCostEl.textContent = formatStockCurrency(qty * currentPrice, currency);
     }
 }
 
@@ -2994,7 +2995,9 @@ function populateTradeForm() {
     if (currentSymbol) {
         const cleanSym = currentSymbol.replace('.NS', '').replace('.BO', '');
         symbolField.value = cleanSym;
-        priceField.value = formatINR(currentPrice);
+        
+        const currency = currentStockData ? currentStockData.currency : 'INR';
+        priceField.value = formatStockCurrency(currentPrice, currency);
 
         if (executeBtn) {
             executeBtn.disabled = false;
