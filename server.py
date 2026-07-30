@@ -302,11 +302,12 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 labels = []
                 
                 is_intraday = interval_param.endswith('m') or interval_param.endswith('h') or range_param == '1d'
+                gmt_offset = meta.get('gmtoffset', 0)
                 for i in range(len(timestamps)):
                     if quote.get('close') and i < len(quote['close']) and quote['close'][i] is not None:
                         price_in_native = quote['close'][i]
                         prices.append(price_in_native * exchange_rate)
-                        dt = datetime.datetime.fromtimestamp(timestamps[i])
+                        dt = datetime.datetime.utcfromtimestamp(timestamps[i] + gmt_offset)
                         if is_intraday:
                             labels.append(dt.strftime('%H:%M'))
                         else:

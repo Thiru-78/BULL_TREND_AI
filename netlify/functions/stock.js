@@ -58,15 +58,24 @@ exports.handler = async function(event, context) {
             const labels = [];
             
             const isIntraday = interval.endsWith('m') || interval.endsWith('h') || range === '1d';
+            const gmtOffset = result.meta.gmtoffset || 0;
             for (let i = 0; i < timestamps.length; i++) {
                 if (quote.close && quote.close[i] !== null && quote.close[i] !== undefined) {
                     const priceInNative = quote.close[i];
                     prices.push(priceInNative * exchangeRate);
-                    const date = new Date(timestamps[i] * 1000);
+                    
+                    const localTimeMs = (timestamps[i] + gmtOffset) * 1000;
+                    const date = new Date(localTimeMs);
                     if (isIntraday) {
-                        labels.push(date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }));
+                        const hours = String(date.getUTCHours()).padStart(2, '0');
+                        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                        labels.push(`${hours}:${minutes}`);
                     } else {
-                        labels.push(date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }));
+                        const day = String(date.getUTCDate()).padStart(2, '0');
+                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        const month = months[date.getUTCMonth()];
+                        const year = date.getUTCFullYear();
+                        labels.push(`${day} ${month} ${year}`);
                     }
                 }
             }
