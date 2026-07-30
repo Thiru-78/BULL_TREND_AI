@@ -9,6 +9,7 @@ const changePercentEl = document.getElementById('change-percent');
 const lastUpdatedEl = document.getElementById('last-updated');
 const trendIconEl = document.getElementById('trend-icon');
 const chartLoader = document.getElementById('chart-loader');
+const headerSearchContainer = document.querySelector('.header .search-container');
 
 // Modal Elements
 const knowMoreBtn = document.getElementById('know-more-btn');
@@ -41,9 +42,11 @@ const alertPriceInput = document.getElementById('alert-price');
 const alertConditionSelect = document.getElementById('alert-condition');
 const alertEmailInput = document.getElementById('alert-email');
 const setAlertBtn = document.getElementById('set-alert-btn');
-const activeAlertContainer = document.getElementById('active-alert-container');
-const activeAlertText = document.getElementById('active-alert-text');
-const clearAlertBtn = document.getElementById('clear-alert-btn');
+const activeAlertsList = document.getElementById('active-alerts-list');
+const activeAlertsCount = document.getElementById('active-alerts-count');
+const alertStockSearch = document.getElementById('alert-stock-search');
+const alertStockSuggestions = document.getElementById('alert-stock-suggestions');
+const alertCurrentPriceDisplay = document.getElementById('alert-current-price-display');
 const toastContainer = document.getElementById('toast-container');
 
 // AI Elements
@@ -55,11 +58,18 @@ const aiStockTickerEl = document.getElementById('ai-stock-ticker');
 
 // State
 let currentSymbol = 'RELIANCE.NS';
+let alertSelectedSymbol = 'RELIANCE.NS';
+let alertSelectedPrice = 0;
+let alertSelectedCurrency = 'INR';
 let stockChart = null;
+let tradeChart = null;
+let currentTradeChartRange = '1d';
+let currentTradeChartInterval = '15m';
+let currentTradeChartLimit = null;
 let currentPrice = 0;
 let previousClose = 0;
 let updateInterval = null;
-let activeAlert = null;
+let activeAlerts = JSON.parse(localStorage.getItem('activeAlerts') || '[]');
 let currentStockData = null;
 let insightsStockData = [];
 let activeStockDetails = null; // Stores current stock full metadata response
@@ -77,25 +87,25 @@ function initChart() {
         console.error("Chart.js is not loaded.");
         return;
     }
-
+    
     // Destroy existing chart on canvas to prevent reuse error
     const existingChart = Chart.getChart("stockChart");
     if (existingChart) {
         try {
             existingChart.destroy();
-        } catch (e) {
+        } catch(e) {
             console.error("Error destroying chart instance by ID:", e);
         }
     }
     if (stockChart) {
         try {
             stockChart.destroy();
-        } catch (e) {
+        } catch(e) {
             console.error("Error destroying stockChart reference:", e);
         }
         stockChart = null;
     }
-
+    
     const ctx = document.getElementById('stockChart').getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
     gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
@@ -135,7 +145,7 @@ function initChart() {
                     borderWidth: 1,
                     padding: 12,
                     callbacks: {
-                        label: function (context) {
+                        label: function(context) {
                             return `₹ ${context.parsed.y.toFixed(2)}`;
                         }
                     }
@@ -186,7 +196,7 @@ function initChart() {
                     ticks: {
                         color: '#94a3b8',
                         font: { family: "'Outfit', sans-serif", size: 10 },
-                        callback: function (value) {
+                        callback: function(value) {
                             if (value >= 1000) {
                                 return '₹' + (value / 1000).toFixed(0) + 'K';
                             }
@@ -244,7 +254,7 @@ function formatStockCurrency(price, currency = 'INR') {
 
 // Top 10 Symbols (Mixed Indian & US Stocks)
 const TOP_10_SYMBOLS = [
-    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'INFY.NS',
+    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'INFY.NS', 
     'AAPL', 'TSLA', 'MSFT', 'NVDA', 'GOOGL'
 ];
 
@@ -253,7 +263,7 @@ let currentChartRange = '2y';
 function filterChartDataByRange(labels, prices, range) {
     let filteredPrices = [...prices];
     let filteredLabels = [...labels];
-
+    
     if (range === '1d' || range === '2y') {
         return { labels: filteredLabels, prices: filteredPrices };
     } else if (range === '1m') {
@@ -276,9 +286,9 @@ function filterChartDataByRange(labels, prices, range) {
 async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad = false) {
     try {
         if (!isBackgroundUpdate) chartLoader.classList.remove('hidden');
-
+        
         let cleanSymbol = symbol.trim().toUpperCase();
-
+        
         // Auto-translation: If query looks like a query or friendly name rather than a raw ticker
         const isLikelyQuery = /\s/.test(cleanSymbol) || (cleanSymbol.length > 6 && !cleanSymbol.includes('.'));
         if (isLikelyQuery) {
@@ -288,11 +298,11 @@ async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad 
                 if (searchData && searchData.length > 0) {
                     cleanSymbol = searchData[0].symbol;
                 }
-            } catch (err) {
+            } catch(err) {
                 console.error("Auto-translation error:", err);
             }
         }
-
+        
         // Add .NS default for common Indian symbols if omitted
         if (['RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY'].includes(cleanSymbol)) {
             cleanSymbol += '.NS';
@@ -303,7 +313,7 @@ async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad 
         const interval = (currentChartRange === '1d') ? '2m' : '1d';
         const url = `/.netlify/functions/stock?action=chart&symbol=${cleanSymbol}&range=${range}&interval=${interval}`;
         const response = await fetch(url).catch(() => ({ ok: false }));
-
+        
         if (response.ok) {
             data = await response.json();
             if (data.error) throw new Error(data.error);
@@ -313,19 +323,19 @@ async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad 
 
         currentPrice = parseFloat(data.price);
         previousClose = parseFloat(data.prevClose);
-
+        
         const changeValue = currentPrice - previousClose;
         const changePercent = (changeValue / previousClose) * 100;
-
+        
         activeStockDetails = data;
         knowMoreBtn.classList.remove('hidden');
         updateDashboardUI(data.symbol.replace('.NS', ''), data.name, currentPrice, changeValue, changePercent, data.currency);
         populateTradeForm();
-
+        
         if (!isBackgroundUpdate && !isInitialLoad) {
             symbolInput.value = '';
         }
-
+        
         // Ensure the correct filter button is marked active
         document.querySelectorAll('.filter-btn').forEach(b => {
             if (b.getAttribute('data-range') === currentChartRange) {
@@ -334,23 +344,22 @@ async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad 
                 b.classList.remove('active');
             }
         });
-
+        
         if (data.prices && data.prices.length > 0) {
             const filteredData = filterChartDataByRange(data.labels, data.prices, currentChartRange);
             updateChart(filteredData.labels, filteredData.prices, changeValue >= 0, data.currency);
         }
-
-        checkAlerts(currentPrice);
-
+        
+        checkAlerts(data.symbol, currentPrice);
+        
         currentStockData = data;
         if (typeof updateWatchlistButtonState === 'function') {
             updateWatchlistButtonState(data.symbol);
         }
-
+        
         if (aiStockNameEl) aiStockNameEl.textContent = data.name || data.symbol;
         if (aiStockTickerEl) aiStockTickerEl.textContent = data.symbol.replace('.NS', '');
         aiTickerName.textContent = data.symbol.replace('.NS', '');
-        document.getElementById('alert-ticker-name').textContent = data.symbol.replace('.NS', '');
 
     } catch (error) {
         console.error('Error fetching stock data:', error);
@@ -364,26 +373,26 @@ async function fetchStockData(symbol, isBackgroundUpdate = false, isInitialLoad 
 
 async function loadTop10() {
     top10ListEl.innerHTML = '<div class="loader-small"></div>';
-
+    
     try {
         const symbols = TOP_10_SYMBOLS.join(',');
         const url = `/.netlify/functions/stock?action=top10&symbols=${symbols}`;
-
+        
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Server returned ${response.status}`);
-
+        
         const resultData = await response.json();
         if (resultData.error) throw new Error(resultData.error);
-
+        
         top10ListEl.innerHTML = '';
-
+        
         resultData.forEach((stockData) => {
             const symbolBase = stockData.symbol.replace('.NS', '');
             const price = parseFloat(stockData.price);
             const change = parseFloat(stockData.change);
             const pct = parseFloat(stockData.percent_change);
             const isUp = change >= 0;
-
+            
             const div = document.createElement('div');
             div.className = 'top10-item';
             div.innerHTML = `
@@ -395,16 +404,16 @@ async function loadTop10() {
                     ${isUp ? '▲' : '▼'} ${Math.abs(pct).toFixed(2)}%
                 </div>
             `;
-
+            
             div.addEventListener('click', () => {
                 symbolInput.value = stockData.symbol;
                 searchBtn.click();
             });
-
+            
             top10ListEl.appendChild(div);
         });
-
-    } catch (e) {
+        
+    } catch(e) {
         console.error("Top 10 Fetch Error:", e);
         top10ListEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:10px;">Failed to load list.</p>';
     }
@@ -413,15 +422,15 @@ async function loadTop10() {
 function updateDashboardUI(symbol, name, price, changeVal, changePct, currency = 'INR') {
     stockTickerEl.textContent = symbol;
     stockNameEl.textContent = name || symbol;
-
+    
     currentPriceEl.textContent = formatStockCurrency(price, currency);
-
+    
     const isPositive = changeVal >= 0;
     const sign = isPositive ? '+' : '';
     const formattedChange = formatStockCurrency(Math.abs(changeVal), currency);
     const sym = getCurrencySymbol(currency);
     changePercentEl.textContent = `${sign}${formattedChange.replace(sym, sym + ' ')} (${sign}${changePct.toFixed(2)}%)`;
-
+    
     if (isPositive) {
         priceChangeEl.className = 'price-change positive';
         trendIconEl.innerHTML = `<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline>`;
@@ -429,7 +438,7 @@ function updateDashboardUI(symbol, name, price, changeVal, changePct, currency =
         priceChangeEl.className = 'price-change negative';
         trendIconEl.innerHTML = `<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline>`;
     }
-
+    
     lastUpdatedEl.textContent = `Last updated: ${new Date().toLocaleTimeString('en-IN')}`;
 }
 
@@ -438,27 +447,27 @@ function updateChart(labels, data, isPositive, currency = 'INR') {
     if (typeof stockChart.resetZoom === 'function') {
         stockChart.resetZoom('none');
     }
-
+    
     const symbolChar = getCurrencySymbol(currency);
-
+    
     stockChart.data.labels = labels;
     stockChart.data.datasets[0].data = data;
     stockChart.data.datasets[0].label = `Price (${symbolChar})`;
-
+    
     // Update tooltip callback
-    stockChart.options.plugins.tooltip.callbacks.label = function (context) {
+    stockChart.options.plugins.tooltip.callbacks.label = function(context) {
         return `${symbolChar} ${context.parsed.y.toFixed(2)}`;
     };
-
+    
     // Update y-axis scale callback
-    stockChart.options.scales.y.ticks.callback = function (value) {
+    stockChart.options.scales.y.ticks.callback = function(value) {
         return `${symbolChar} ${value}`;
     };
-
+    
     const color = isPositive ? '#00e699' : '#ef4444';
     const ctx = document.getElementById('stockChart').getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-
+    
     if (isPositive) {
         gradient.addColorStop(0, 'rgba(0, 230, 153, 0.4)');
         gradient.addColorStop(1, 'rgba(0, 230, 153, 0.0)');
@@ -466,25 +475,16 @@ function updateChart(labels, data, isPositive, currency = 'INR') {
         gradient.addColorStop(0, 'rgba(239, 68, 68, 0.4)');
         gradient.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
     }
-
+    
     stockChart.data.datasets[0].borderColor = color;
     stockChart.data.datasets[0].backgroundColor = gradient;
     stockChart.data.datasets[0].pointHoverBorderColor = color;
-
+    
     stockChart.update();
 }
 
 // --- AI PREDICT LOGIC ---
 function runAiPrediction() {
-    const isPremium = localStorage.getItem('user_premium_status') === 'active';
-    if (!isPremium) {
-        showToast('AI Predictions require VIP Premium Status. Redirecting to Upgrade...', 'warning');
-        setTimeout(() => {
-            initiateStripeCheckout('VIP_UPGRADE', 1, 499.00);
-        }, 1500);
-        return;
-    }
-
     if (!currentStockData || !currentStockData.prices || currentStockData.prices.length === 0) {
         showToast('No stock data available to run prediction.', 'error');
         return;
@@ -493,7 +493,7 @@ function runAiPrediction() {
     runAiBtn.disabled = true;
     runAiBtn.textContent = 'Processing Data...';
     aiResults.classList.remove('hidden');
-
+    
     // Reset
     document.getElementById('ai-rsi-fill').style.width = '0%';
     document.getElementById('ai-macd-fill').style.width = '0%';
@@ -501,7 +501,7 @@ function runAiPrediction() {
     document.getElementById('ai-rsi-text').textContent = 'Analyzing...';
     document.getElementById('ai-macd-text').textContent = 'Analyzing...';
     document.getElementById('ai-vol-text').textContent = 'Analyzing...';
-
+    
     document.getElementById('ai-verdict').textContent = '--';
     document.getElementById('ai-verdict').className = 'verdict-direction';
     document.getElementById('ai-target').textContent = '₹ --';
@@ -511,14 +511,14 @@ function runAiPrediction() {
     document.getElementById('ai-confidence-fill').style.width = '0%';
     document.getElementById('ai-confidence-badge').textContent = '--';
     document.getElementById('ai-confidence-badge').className = 'confidence-badge';
-
+    
     // Simulate AI thinking/processing time (1.5 seconds for visual impact)
     setTimeout(() => {
         const prices = currentStockData.prices.filter(p => p > 0);
         const rsiVal = calculateRSI(prices, 14) || 50;
         const regression = calculateRegression(prices.slice(-Math.min(prices.length, 60))) || { slope: 0 };
         const vol = calculateVolatility(prices) || 0.02;
-
+        
         const quote = {
             symbol: currentStockData.symbol,
             price: currentPrice
@@ -527,10 +527,10 @@ function runAiPrediction() {
             time: currentStockData.labels[idx] || '',
             price: price
         }));
-
+        
         // Compute predictions for tomorrow (1 day projection)
         const prediction = runStockPrediction(quote, chartPoints, 1);
-
+        
         // 1. Update Momentum (RSI) Progress Bar
         const rsiFill = document.getElementById('ai-rsi-fill');
         rsiFill.style.width = `${rsiVal}%`;
@@ -544,7 +544,7 @@ function runAiPrediction() {
             rsiFill.style.backgroundColor = 'var(--primary)';
             document.getElementById('ai-rsi-text').textContent = `RSI: ${rsiVal.toFixed(1)} (Neutral)`;
         }
-
+        
         // 2. Update Trend (Linear Regression) Progress Bar
         const slopePct = regression.slope / currentPrice;
         // Map slopePct to a percentage from 0 to 100 where 50 is neutral
@@ -561,7 +561,7 @@ function runAiPrediction() {
             macdFill.style.backgroundColor = 'var(--text-muted)';
             document.getElementById('ai-macd-text').textContent = `Trend Slope: ${(slopePct * 100).toFixed(4)}% (Flat)`;
         }
-
+        
         // 3. Update Volatility Progress Bar
         const volVal = Math.min(100, vol * 3000); // map up to ~3.3% daily standard deviation as 100%
         const volFill = document.getElementById('ai-vol-fill');
@@ -576,7 +576,7 @@ function runAiPrediction() {
             volFill.style.backgroundColor = 'var(--success)';
             document.getElementById('ai-vol-text').textContent = `Volatility: ${(vol * 100).toFixed(2)}% (Low / Stable)`;
         }
-
+        
         // 4. Update Final Verdict Grid
         const verdictEl = document.getElementById('ai-verdict');
         const expectedChangeEl = document.getElementById('ai-expected-change');
@@ -584,10 +584,10 @@ function runAiPrediction() {
         const confidenceScoreEl = document.getElementById('ai-confidence-score');
         const confidenceFillEl = document.getElementById('ai-confidence-fill');
         const confidenceBadgeEl = document.getElementById('ai-confidence-badge');
-
+        
         const isUp = prediction.direction === 'up';
         const isDown = prediction.direction === 'down';
-
+        
         // Update tomorrow's price direction status
         if (isUp) {
             verdictEl.textContent = 'INCREASE ▲';
@@ -599,18 +599,18 @@ function runAiPrediction() {
             verdictEl.textContent = 'STABLE ▬';
             verdictEl.className = 'verdict-direction flat';
         }
-
+        
         // Update projected target and change percent
         targetEl.textContent = formatStockCurrency(prediction.predictedPrice, currentStockData ? currentStockData.currency : 'INR');
         const sign = prediction.expectedChange >= 0 ? '+' : '';
         expectedChangeEl.textContent = `${sign}${prediction.expectedChange.toFixed(2)}%`;
         expectedChangeEl.className = `expected-change ${prediction.direction}`;
-
+        
         // Update confidence
         const confidence = prediction.confidence;
         confidenceScoreEl.textContent = `${confidence}%`;
         confidenceFillEl.style.width = `${confidence}%`;
-
+        
         if (confidence >= 70) {
             confidenceBadgeEl.textContent = 'High Confidence';
             confidenceBadgeEl.className = 'confidence-badge high';
@@ -624,16 +624,26 @@ function runAiPrediction() {
             confidenceBadgeEl.className = 'confidence-badge low';
             confidenceFillEl.style.backgroundColor = 'var(--danger)';
         }
-
+        
         runAiBtn.textContent = 'Analysis Complete';
         setTimeout(() => {
             runAiBtn.disabled = false;
             runAiBtn.textContent = 'Run Analysis Again';
         }, 3000);
-
+        
     }, 1500);
 }
 
+
+function updateHeaderSearchVisibility() {
+    if (!headerSearchContainer) return;
+    const activeView = document.querySelector('.view-section.active');
+    if (activeView && activeView.id === 'view-alerts') {
+        headerSearchContainer.classList.add('hidden');
+    } else {
+        headerSearchContainer.classList.remove('hidden');
+    }
+}
 
 // --- TABS & NAVIGATION ---
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -643,14 +653,17 @@ document.querySelectorAll('.nav-item').forEach(item => {
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
         // Add active class to clicked
         item.classList.add('active');
-
+        
         // Hide all views
         document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
-
+        
         // Show target view
         const targetId = item.getAttribute('data-target');
         document.getElementById(targetId).classList.add('active');
-
+        
+        // Update header search visibility
+        updateHeaderSearchVisibility();
+        
         if (targetId === 'view-insights') {
             loadMarketInsights();
         } else if (targetId === 'view-indices') {
@@ -666,92 +679,212 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 
 // Alert System
+// Alert System
+function renderActiveAlerts() {
+    if (!activeAlertsList) return;
+    activeAlertsList.innerHTML = '';
+    
+    if (activeAlerts.length === 0) {
+        activeAlertsList.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 16px;">No active alerts set.</div>`;
+        if (activeAlertsCount) activeAlertsCount.textContent = '0';
+        return;
+    }
+    
+    if (activeAlertsCount) activeAlertsCount.textContent = activeAlerts.length;
+    
+    activeAlerts.forEach(alert => {
+        const symbolBase = alert.symbol.replace('.NS', '').replace('.BO', '');
+        const condText = alert.condition === 'above' ? 'goes above (^)' : (alert.condition === 'below' ? 'drops below (˅)' : 'equals (=)');
+        
+        const div = document.createElement('div');
+        div.className = 'active-alert-item';
+        div.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+                <div style="font-weight: 700; color: #fff;">
+                    ${symbolBase} 
+                    <span style="font-weight: normal; color: var(--text-muted); font-size: 0.75rem;">(${alert.condition})</span>
+                </div>
+                <div style="color: var(--primary); font-family: monospace; font-size: 0.8rem;">
+                    Target: ${formatStockCurrency(alert.price, alert.currency)}
+                </div>
+            </div>
+            <button class="delete-alert-btn" data-id="${alert.id}" title="Remove Alert">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        `;
+        
+        // Add delete listener
+        div.querySelector('.delete-alert-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = parseInt(e.currentTarget.getAttribute('data-id'));
+            deleteAlert(id);
+        });
+        
+        activeAlertsList.appendChild(div);
+    });
+}
+
+function deleteAlert(id) {
+    activeAlerts = activeAlerts.filter(a => a.id !== id);
+    localStorage.setItem('activeAlerts', JSON.stringify(activeAlerts));
+    renderActiveAlerts();
+    showToast('Alert removed.', 'success');
+}
+
 function setAlert() {
     const priceStr = alertPriceInput.value;
     const condition = alertConditionSelect.value;
     const email = alertEmailInput.value.trim();
-
+    
     if (!priceStr || isNaN(priceStr)) { showToast('Please enter a valid price.', 'error'); return; }
     if (!email) { showToast('Please enter an email address for notifications.', 'error'); return; }
-
+    
     // Simple email validation regex
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
         showToast('Please enter a valid email address (e.g. user@example.com).', 'error');
         return;
     }
-
+    
+    // Request permission for system notifications
+    if (window.Notification && Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                console.log("System notifications enabled.");
+            }
+        });
+    }
+    
     const targetPrice = parseFloat(priceStr);
-    activeAlert = { price: targetPrice, condition, email, currency: currentStockData ? currentStockData.currency : 'INR' };
-    const condText = condition === 'above' ? 'goes above (^)' : (condition === 'below' ? 'drops below (˅)' : 'equals (=)');
-    activeAlertText.innerHTML = `Alert when price <strong>${condText}</strong> ${formatStockCurrency(targetPrice, activeAlert.currency)} (Email to: <strong>${email}</strong>)`;
-    activeAlertContainer.classList.remove('hidden');
+    const newAlert = {
+        id: Date.now(),
+        symbol: alertSelectedSymbol,
+        price: targetPrice,
+        condition,
+        email,
+        currency: alertSelectedCurrency
+    };
+    
+    activeAlerts.push(newAlert);
+    localStorage.setItem('activeAlerts', JSON.stringify(activeAlerts));
+    
+    renderActiveAlerts();
     alertPriceInput.value = '';
     alertEmailInput.value = '';
-    showToast('Alert created successfully with email notifications!', 'success');
+    showToast('Alert created successfully with system & email notifications!', 'success');
 }
 
-function clearAlert() {
-    activeAlert = null;
-    activeAlertContainer.classList.add('hidden');
-    showToast('Alert cancelled.', 'success');
-}
-
-function checkAlerts(currentPrice) {
-    if (!activeAlert) return;
-    let triggered = false;
-    if (activeAlert.condition === 'above' && currentPrice >= activeAlert.price) triggered = true;
-    else if (activeAlert.condition === 'below' && currentPrice <= activeAlert.price) triggered = true;
-    else if (activeAlert.condition === 'equals' && Math.abs(currentPrice - activeAlert.price) < 0.01) triggered = true;
-
-    if (triggered) {
-        const symbolStr = stockTickerEl.textContent;
-        const msg = `🎯 TARGET HIT: ${symbolStr} is now ${formatStockCurrency(currentPrice, activeAlert.currency || 'INR')}`;
-
-        // App Notification Toast
-        showToast(msg, 'alert');
-
-        // Email Notification Trigger
-        const email = activeAlert.email;
-        console.log(`[Email Gateway] Triggering alert Email to ${email}: "${msg}"`);
-        showToast(`📧 Sending email alert to ${email}...`, 'success');
-        const emailUrl = `/.netlify/functions/stock?action=send_email&to=${encodeURIComponent(email)}&subject=${encodeURIComponent('Bull Trend AI Price Alert')}&message=${encodeURIComponent(msg)}`;
-        fetch(emailUrl)
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    if (data.simulated) {
-                        showToast(`📧 Email alert simulated & logged for ${email}!`, 'success');
-                        showToast(`⚠️ Server SMTP is not configured. Real email NOT sent.`, 'warning');
-                    } else {
-                        showToast(`📧 Email alert sent successfully to ${email}!`, 'success');
-                    }
-                } else {
-                    console.error('Email server error:', data.error);
-                    showToast(`⚠️ Email alert failed: ${data.error}`, 'error');
-                }
-            })
-            .catch(err => {
-                console.error('Failed to trigger email notification:', err);
-                showToast(`📧 Email simulated & logged locally for ${email}.`, 'success');
-                showToast(`⚠️ Server is offline/unreachable. Real email NOT sent.`, 'warning');
-            });
-
-        try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator(); osc.connect(ctx.destination);
-            osc.frequency.setValueAtTime(880, ctx.currentTime); osc.start(); osc.stop(ctx.currentTime + 0.1);
-            setTimeout(() => {
-                const osc2 = ctx.createOscillator(); osc2.connect(ctx.destination);
-                osc2.frequency.setValueAtTime(1046.50, ctx.currentTime); osc2.start(); osc2.stop(ctx.currentTime + 0.2);
-            }, 150);
-        } catch (e) { }
-
-        if (typeof addAlertHistoryRecord === 'function') {
-            addAlertHistoryRecord(symbolStr, currentPrice, activeAlert.condition, activeAlert.price);
+async function fetchAlertStockData(symbol) {
+    if (!symbol) return;
+    try {
+        const cleanSymbol = symbol.trim().toUpperCase();
+        const res = await fetch(`/.netlify/functions/stock?action=chart&symbol=${encodeURIComponent(cleanSymbol)}&range=1d&interval=1d`);
+        const data = await res.json();
+        
+        if (data.error) {
+            console.error("Alert stock data fetch error:", data.error);
+            return;
         }
+        
+        alertSelectedSymbol = data.symbol;
+        alertSelectedPrice = data.price;
+        alertSelectedCurrency = data.currency;
+        
+        // Update UI displays
+        document.getElementById('alert-ticker-name').textContent = data.symbol.replace('.NS', '').replace('.BO', '');
+        if (alertCurrentPriceDisplay) {
+            alertCurrentPriceDisplay.textContent = `Current: ${formatStockCurrency(data.price, data.currency)}`;
+        }
+        alertPriceInput.value = data.price.toFixed(2);
+        
+    } catch (e) {
+        console.error("Failed to fetch alert stock price:", e);
+    }
+}
 
-        clearAlert();
+function checkAlerts(symbol, currentPrice) {
+    if (activeAlerts.length === 0) return;
+    
+    // Find all matching alerts for this symbol
+    const matchingAlerts = activeAlerts.filter(a => a.symbol.toUpperCase() === symbol.toUpperCase());
+    if (matchingAlerts.length === 0) return;
+    
+    const triggeredIds = [];
+    
+    matchingAlerts.forEach(alert => {
+        let triggered = false;
+        if (alert.condition === 'above' && currentPrice >= alert.price) triggered = true;
+        else if (alert.condition === 'below' && currentPrice <= alert.price) triggered = true;
+        else if (alert.condition === 'equals' && Math.abs(currentPrice - alert.price) < 0.01) triggered = true;
+        
+        if (triggered) {
+            triggeredIds.push(alert.id);
+            const symbolStr = alert.symbol.replace('.NS', '').replace('.BO', '');
+            const msg = `🎯 TARGET HIT: ${symbolStr} is now ${formatStockCurrency(currentPrice, alert.currency || 'INR')}`;
+            
+            // Add to history
+            if (typeof addAlertHistoryRecord === 'function') {
+                addAlertHistoryRecord(alert.symbol, currentPrice, alert.condition, alert.price);
+            }
+            
+            // App Notification Toast
+            showToast(msg, 'alert');
+            
+            // System Native Notification
+            if (window.Notification && Notification.permission === "granted") {
+                try {
+                    new Notification("Bull Trend AI Price Alert", {
+                        body: msg,
+                        icon: "logo.png"
+                    });
+                } catch (e) {
+                    console.error("Failed to trigger system notification:", e);
+                }
+            }
+            
+            // Email Notification Trigger
+            const email = alert.email;
+            console.log(`[Email Gateway] Triggering alert Email to ${email}: "${msg}"`);
+            showToast(`📧 Sending email alert to ${email}...`, 'success');
+            const emailUrl = `/.netlify/functions/stock?action=send_email&to=${encodeURIComponent(email)}&subject=${encodeURIComponent('Bull Trend AI Price Alert')}&message=${encodeURIComponent(msg)}`;
+            fetch(emailUrl)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.simulated) {
+                            showToast(`📧 Email alert simulated & logged for ${email}!`, 'success');
+                            showToast(`⚠️ Server SMTP is not configured. Real email NOT sent.`, 'warning');
+                        } else {
+                            showToast(`📧 Email alert sent successfully to ${email}!`, 'success');
+                        }
+                    } else {
+                        console.error('Email server error:', data.error);
+                        showToast(`⚠️ Email alert failed: ${data.error}`, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to trigger email notification:', err);
+                    showToast(`📧 Email simulated & logged locally for ${email}.`, 'success');
+                    showToast(`⚠️ Server is offline/unreachable. Real email NOT sent.`, 'warning');
+                });
+                
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator(); osc.connect(ctx.destination);
+                osc.frequency.setValueAtTime(880, ctx.currentTime); osc.start(); osc.stop(ctx.currentTime + 0.1);
+                setTimeout(() => {
+                    const osc2 = ctx.createOscillator(); osc2.connect(ctx.destination);
+                    osc2.frequency.setValueAtTime(1046.50, ctx.currentTime); osc2.start(); osc2.stop(ctx.currentTime + 0.2);
+                }, 150);
+            } catch (e) {}
+        }
+    });
+    
+    if (triggeredIds.length > 0) {
+        // Remove triggered alerts from active list
+        activeAlerts = activeAlerts.filter(a => !triggeredIds.includes(a.id));
+        localStorage.setItem('activeAlerts', JSON.stringify(activeAlerts));
+        renderActiveAlerts();
     }
 }
 
@@ -794,7 +927,7 @@ function updateActiveSuggestion(items) {
 symbolInput.addEventListener('keydown', (e) => {
     const items = suggestionsBox.querySelectorAll('.suggestion-item');
     if (suggestionsBox.classList.contains('hidden') || !items.length) return;
-
+    
     if (e.key === 'ArrowDown') {
         e.preventDefault();
         activeSuggestionIndex = (activeSuggestionIndex + 1) % items.length;
@@ -961,10 +1094,10 @@ function renderSuggestions(results) {
         results.forEach((item) => {
             const div = document.createElement('div');
             div.className = 'suggestion-item';
-
+            
             const name = item.name.length > 25 ? item.name.slice(0, 22) + '...' : item.name;
             const cleanSymbol = item.symbol.replace('.NS', '').replace('.BO', '');
-
+            
             div.innerHTML = `
                 <div class="suggestion-name" title="${item.name}">${name}</div>
                 <div class="suggestion-meta">
@@ -989,19 +1122,19 @@ symbolInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
     activeSuggestionIndex = -1;
     const query = symbolInput.value.trim().toLowerCase();
-
+    
     if (query.length < 1) {
         suggestionsBox.classList.add('hidden');
         return;
     }
-
+    
     // 1. Get instant matches from our local popular stocks database
     let localMatches = [];
     if (query.length === 1) {
         // For single-letter queries, ONLY return matches where the symbol or the company name starts with the letter.
         // This prevents loose inner-word matching of common terms (e.g. 'c' matching 'Microsoft Corporation' because of 'Corporation').
-        localMatches = POPULAR_STOCKS.filter(item =>
-            item.symbol.toLowerCase().startsWith(query) ||
+        localMatches = POPULAR_STOCKS.filter(item => 
+            item.symbol.toLowerCase().startsWith(query) || 
             item.name.toLowerCase().startsWith(query)
         );
     } else {
@@ -1009,11 +1142,11 @@ symbolInput.addEventListener('input', () => {
         const startsWithSymbol = [];
         const startsWithName = [];
         const containsMatches = [];
-
+        
         POPULAR_STOCKS.forEach(item => {
             const sym = item.symbol.toLowerCase();
             const name = item.name.toLowerCase();
-
+            
             if (sym.startsWith(query)) {
                 startsWithSymbol.push(item);
             } else if (name.startsWith(query) || name.split(' ').some(word => word.startsWith(query))) {
@@ -1022,17 +1155,17 @@ symbolInput.addEventListener('input', () => {
                 containsMatches.push(item);
             }
         });
-
+        
         localMatches = [...startsWithSymbol, ...startsWithName, ...containsMatches];
     }
-
+    
     // Render local matches instantly to eliminate any lag!
     renderSuggestions(localMatches.slice(0, 10));
-
+    
     // 2. Fetch from backend API with short debounce and client caching
     searchTimeout = setTimeout(async () => {
         if (query.length < 1) return;
-
+        
         try {
             let results;
             if (SEARCH_CACHE[query]) {
@@ -1042,33 +1175,33 @@ symbolInput.addEventListener('input', () => {
                 results = await res.json();
                 SEARCH_CACHE[query] = results;
             }
-
+            
             // Merge local matches and backend results, removing duplicates
             const merged = [...localMatches];
             const seenSymbols = new Set(merged.map(item => item.symbol.toLowerCase()));
-
+            
             // Clean/filter backend results to follow the same relevance rules
             results.forEach(item => {
                 const sym = item.symbol.toLowerCase();
                 const name = item.name.toLowerCase();
-
+                
                 // For single-letter queries, strictly enforce starting with the letter
                 if (query.length === 1) {
-                    const matchesRule = sym.startsWith(query) ||
-                        name.startsWith(query) ||
-                        name.split(' ').some(word => word.startsWith(query));
+                    const matchesRule = sym.startsWith(query) || 
+                                        name.startsWith(query) || 
+                                        name.split(' ').some(word => word.startsWith(query));
                     if (!matchesRule) return;
                 }
-
+                
                 if (!seenSymbols.has(sym)) {
                     merged.push(item);
                     seenSymbols.add(sym);
                 }
             });
-
+            
             // Render the final combined list (up to 10 items)
             renderSuggestions(merged.slice(0, 10));
-        } catch (e) {
+        } catch(e) {
             console.error("Suggestions error:", e);
         }
     }, 350); // Optimized to 350ms debounce to filter out intermediate keystrokes
@@ -1079,6 +1212,140 @@ document.addEventListener('click', (e) => {
     if (!symbolInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
         suggestionsBox.classList.add('hidden');
     }
+    if (alertStockSearch && alertStockSuggestions && !alertStockSearch.contains(e.target) && !alertStockSuggestions.contains(e.target)) {
+        alertStockSuggestions.classList.add('hidden');
+    }
+});
+
+let alertSearchTimeout = null;
+
+function renderAlertSuggestions(results) {
+    if (!alertStockSuggestions) return;
+    if (results && results.length > 0) {
+        alertStockSuggestions.innerHTML = '';
+        results.forEach((item) => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            
+            const name = item.name.length > 25 ? item.name.slice(0, 22) + '...' : item.name;
+            const cleanSymbol = item.symbol.replace('.NS', '').replace('.BO', '');
+            
+            div.innerHTML = `
+                <div class="suggestion-name" title="${item.name}">${name}</div>
+                <div class="suggestion-meta">
+                    <span class="suggestion-symbol">${cleanSymbol}</span>
+                    <span style="font-size:0.75rem;opacity:0.8;">(${item.exchange})</span>
+                </div>
+            `;
+            div.addEventListener('click', () => {
+                alertStockSearch.value = '';
+                alertStockSuggestions.classList.add('hidden');
+                fetchAlertStockData(item.symbol);
+            });
+            alertStockSuggestions.appendChild(div);
+        });
+        alertStockSuggestions.classList.remove('hidden');
+    } else {
+        alertStockSuggestions.classList.add('hidden');
+    }
+}
+
+if (alertStockSearch) {
+    alertStockSearch.addEventListener('input', () => {
+        clearTimeout(alertSearchTimeout);
+        const query = alertStockSearch.value.trim().toLowerCase();
+        
+        if (query.length < 1) {
+            alertStockSuggestions.classList.add('hidden');
+            return;
+        }
+        
+        // 1. Get instant matches from our local popular stocks database
+        let localMatches = [];
+        if (query.length === 1) {
+            localMatches = POPULAR_STOCKS.filter(item => 
+                item.symbol.toLowerCase().startsWith(query) || 
+                item.name.toLowerCase().startsWith(query)
+            );
+        } else {
+            const startsWithSymbol = [];
+            const startsWithName = [];
+            const containsMatches = [];
+            
+            POPULAR_STOCKS.forEach(item => {
+                const sym = item.symbol.toLowerCase();
+                const name = item.name.toLowerCase();
+                
+                if (sym.startsWith(query)) {
+                    startsWithSymbol.push(item);
+                } else if (name.startsWith(query) || name.split(' ').some(word => word.startsWith(query))) {
+                    startsWithName.push(item);
+                } else if (sym.includes(query) || name.includes(query)) {
+                    containsMatches.push(item);
+                }
+            });
+            
+            localMatches = [...startsWithSymbol, ...startsWithName, ...containsMatches];
+        }
+        
+        // Render local matches instantly
+        renderAlertSuggestions(localMatches.slice(0, 10));
+        
+        // 2. Fetch from backend API with 350ms debounce
+        alertSearchTimeout = setTimeout(async () => {
+            if (query.length < 1) return;
+            
+            try {
+                let results;
+                if (SEARCH_CACHE[query]) {
+                    results = SEARCH_CACHE[query];
+                } else {
+                    const res = await fetch(`/.netlify/functions/stock?action=search&q=${encodeURIComponent(query)}`);
+                    results = await res.json();
+                    SEARCH_CACHE[query] = results;
+                }
+                
+                // Merge local matches and backend results, removing duplicates
+                const merged = [...localMatches];
+                const seenSymbols = new Set(merged.map(item => item.symbol.toLowerCase()));
+                
+                results.forEach(item => {
+                    const sym = item.symbol.toLowerCase();
+                    const name = item.name.toLowerCase();
+                    
+                    if (query.length === 1) {
+                        const matchesRule = sym.startsWith(query) || 
+                                            name.startsWith(query) || 
+                                            name.split(' ').some(word => word.startsWith(query));
+                        if (!matchesRule) return;
+                    }
+                    
+                    if (!seenSymbols.has(sym)) {
+                        merged.push(item);
+                        seenSymbols.add(sym);
+                    }
+                });
+                
+                renderAlertSuggestions(merged.slice(0, 10));
+            } catch(e) {
+                console.error("Alert suggestions error:", e);
+            }
+        }, 350);
+    });
+}
+
+// Quick Suggestion Chips click handlers
+document.querySelectorAll('.quick-suggestion-chips .chip-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const symbol = e.target.getAttribute('data-symbol');
+        
+        // Highlight active chip
+        document.querySelectorAll('.quick-suggestion-chips .chip-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        
+        fetchAlertStockData(symbol);
+    });
 });
 
 // Listeners
@@ -1091,31 +1358,30 @@ searchBtn.addEventListener('click', () => {
         fetchStockData(currentSymbol);
     }
 });
-symbolInput.addEventListener('keypress', (e) => {
+symbolInput.addEventListener('keypress', (e) => { 
     if (e.key === 'Enter') {
         suggestionsBox.classList.add('hidden');
         searchBtn.click();
     }
 });
 setAlertBtn.addEventListener('click', setAlert);
-clearAlertBtn.addEventListener('click', clearAlert);
 runAiBtn.addEventListener('click', runAiPrediction);
 
 // Chart range filtering
 document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         const range = e.target.getAttribute('data-range');
-
+        
         // Remove active class from all filters and add to this one
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
-
+        
         const oldRange = currentChartRange;
         currentChartRange = range;
-
+        
         // If switching to/from 1d, we MUST fetch fresh data since intraday and historical data are different API payloads
         const needsFetch = (oldRange === '1d' || range === '1d');
-
+        
         if (needsFetch) {
             fetchStockData(currentSymbol);
         } else {
@@ -1135,7 +1401,7 @@ if (expandBtn && chartCard) {
     expandBtn.addEventListener('click', () => {
         const isMaximized = chartCard.classList.toggle('maximized');
         const iconSvg = document.getElementById('expand-icon');
-
+        
         if (isMaximized) {
             // Block page scroll
             document.body.style.overflow = 'hidden';
@@ -1159,7 +1425,7 @@ if (expandBtn && chartCard) {
             `;
             expandBtn.title = "Expand Chart";
         }
-
+        
         // Allow CSS transitions/layout flow recalculations to complete before resizing
         setTimeout(() => {
             if (stockChart) {
@@ -1210,7 +1476,7 @@ function showAuthScreen(screenId) {
     authLoginScreen.classList.add('hidden');
     authSignupScreen.classList.add('hidden');
     authBackBtn.classList.add('hidden');
-
+    
     if (screenId === 'selection') {
         authSelectionScreen.classList.remove('hidden');
         authCardSubtitle.textContent = 'Elevate Your Trading with Real-time Insights & AI Predictions';
@@ -1229,7 +1495,7 @@ function showAuthScreen(screenId) {
 
 function enterDashboard(mode, name = '', username = '') {
     authOverlay.classList.add('hidden');
-
+    
     if (mode === 'guest') {
         headerAuthButtons.classList.remove('hidden');
         headerUserProfile.classList.add('hidden');
@@ -1237,20 +1503,20 @@ function enterDashboard(mode, name = '', username = '') {
         headerAuthButtons.classList.add('hidden');
         headerUserProfile.classList.remove('hidden');
     }
-
+    
     // Perform initial profile UI update
     updateProfileUI();
-
+    
     if (!appInitialized) {
         appInitialized = true;
         initChart();
         currentChartRange = '2y'; // Set default 2y range on initial load
         fetchStockData(currentSymbol, false, true);
         loadTop10();
-
+        
         // Initialize Watchlist
         loadWatchlist();
-
+        
         // Watchlist toggle handler
         const addToWatchlistBtn = document.getElementById('add-to-watchlist-btn');
         if (addToWatchlistBtn) {
@@ -1260,7 +1526,7 @@ function enterDashboard(mode, name = '', username = '') {
                 }
             });
         }
-
+        
         if (updateInterval) clearInterval(updateInterval);
         updateInterval = setInterval(() => {
             fetchStockData(currentSymbol, true);
@@ -1272,18 +1538,18 @@ function enterDashboard(mode, name = '', username = '') {
 function handleLogin() {
     const username = loginUsernameInput.value.trim();
     const password = loginPasswordInput.value;
-
+    
     if (!username) { showToast('Please enter your username or email.', 'error'); return; }
     if (password.length < 4) { showToast('Password must be at least 4 characters long.', 'error'); return; }
-
+    
     sessionStorage.setItem('auth_mode', 'logged_in');
     sessionStorage.setItem('auth_name', username);
     sessionStorage.setItem('auth_username', username);
     showToast(`Welcome back, ${username}!`, 'success');
-
+    
     loginUsernameInput.value = '';
     loginPasswordInput.value = '';
-
+    
     enterDashboard('logged_in', username, username);
 }
 
@@ -1292,22 +1558,22 @@ function handleSignup() {
     const username = signupUsernameInput.value.trim();
     const password = signupPasswordInput.value;
     const confirmPassword = signupConfirmPasswordInput.value;
-
+    
     if (!name) { showToast('Please enter your name.', 'error'); return; }
     if (!username) { showToast('Please enter a username or email.', 'error'); return; }
     if (password.length < 4) { showToast('Password must be at least 4 characters long.', 'error'); return; }
     if (password !== confirmPassword) { showToast('Passwords do not match.', 'error'); return; }
-
+    
     sessionStorage.setItem('auth_mode', 'logged_in');
     sessionStorage.setItem('auth_name', name);
     sessionStorage.setItem('auth_username', username);
     showToast('Account created successfully!', 'success');
-
+    
     signupNameInput.value = '';
     signupUsernameInput.value = '';
     signupPasswordInput.value = '';
     signupConfirmPasswordInput.value = '';
-
+    
     enterDashboard('logged_in', name, username);
 }
 
@@ -1324,13 +1590,13 @@ function handleLogout() {
     sessionStorage.removeItem('auth_mode');
     sessionStorage.removeItem('auth_name');
     sessionStorage.removeItem('auth_username');
-
+    
     if (updateInterval) {
         clearInterval(updateInterval);
         updateInterval = null;
     }
     appInitialized = false;
-
+    
     showAuthScreen('selection');
     authOverlay.classList.remove('hidden');
     showToast('Logged out successfully.', 'success');
@@ -1466,18 +1732,18 @@ const companyDatabase = {
 
 function getCompanyDetails(symbol, name) {
     const key = symbol.toUpperCase();
-
+    
     if (companyDatabase[key]) {
         return companyDatabase[key];
     }
-
+    
     const cleanKey = key.split('.')[0];
     const baseSymbols = Object.keys(companyDatabase).map(k => k.split('.')[0]);
     const idx = baseSymbols.indexOf(cleanKey);
     if (idx !== -1) {
         return companyDatabase[Object.keys(companyDatabase)[idx]];
     }
-
+    
     const isIndian = key.includes('.NS') || key.includes('.BO') || ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK'].includes(cleanKey);
     const exchange = isIndian ? 'NSE' : 'US Market';
 
@@ -1486,22 +1752,22 @@ function getCompanyDetails(symbol, name) {
         hash = cleanKey.charCodeAt(i) + ((hash << 5) - hash);
     }
     hash = Math.abs(hash);
-
+    
     const simulatedPE = Number(((hash % 30) + 12).toFixed(1));
     const yields = ['N/A', '0.40%', '0.85%', '1.20%', '1.50%', '2.10%'];
     const simulatedYield = yields[hash % yields.length];
     const simulatedShares = ((hash % 15) + 1) * 500000000;
-
+    
     const simulatedBook = ((hash % 400) + 50);
     const simulatedFace = isIndian ? [1.0, 2.0, 5.0, 10.0][hash % 4] : 0.08;
     const simulatedROCE = ((hash % 25) + 5).toFixed(1) + '%';
     const simulatedROE = ((hash % 20) + 4).toFixed(1) + '%';
-
+    
     const owners = ['Promoter Group', 'Institutional Founders', 'Board of Directors', 'Key Executives'];
     const simulatedOwner = owners[hash % owners.length];
-
+    
     const simulatedDesc = `${name || cleanKey} is a publicly traded enterprise listed on the ${exchange}. The firm focuses on operations in its sector, contributing to global markets, and is tracked as part of our stock price monitoring index.`;
-
+    
     return {
         shares: simulatedShares,
         pe: simulatedPE,
@@ -1541,7 +1807,7 @@ function formatMarketCap(val, currency = 'INR') {
 
 function showCompanyDetailsModal() {
     if (!activeStockDetails) return;
-
+    
     const data = activeStockDetails;
     const details = getCompanyDetails(data.symbol, data.name);
     const isIndian = data.symbol.includes('.NS') || data.symbol.includes('.BO');
@@ -1549,53 +1815,54 @@ function showCompanyDetailsModal() {
     modalCompanyName.textContent = data.name || data.symbol.split('.')[0];
     modalCompanyTicker.textContent = data.symbol;
     modalCompanyExchange.textContent = isIndian ? 'NSE' : (data.symbol.includes('.BO') ? 'BSE' : 'NASDAQ / NYSE');
-
+    
     // 1. Market Cap (live from backend yfinance OR computed from fallback)
     const marketCapVal = data.marketCap !== undefined && data.marketCap !== null ? data.marketCap : (details.shares * data.price);
     modalMarketCap.textContent = formatMarketCap(marketCapVal, data.currency);
-
+    
     // 2. PE Ratio
     modalPeRatio.textContent = data.peRatio !== undefined && data.peRatio !== null ? Number(data.peRatio).toFixed(2) : details.pe;
-
+    
     // 3. Dividend Yield
     modalDivYield.textContent = data.dividendYield !== undefined && data.dividendYield !== null ? data.dividendYield : details.yield;
-
+    
     // 4. Volume
     modalVolume.textContent = data.regularMarketVolume ? data.regularMarketVolume.toLocaleString(data.currency === 'INR' ? 'en-IN' : 'en-US') : 'N/A';
-
+    
     // 5. Day Range
     const dayLowVal = data.regularMarketDayLow ? formatStockCurrency(data.regularMarketDayLow, data.currency) : 'N/A';
     const dayHighVal = data.regularMarketDayHigh ? formatStockCurrency(data.regularMarketDayHigh, data.currency) : 'N/A';
     modalDayRange.textContent = (data.regularMarketDayLow && data.regularMarketDayHigh) ? `${dayLowVal} - ${dayHighVal}` : 'N/A';
-
+    
     // 6. 52-Week Range
     const low52Val = data.fiftyTwoWeekLow ? formatStockCurrency(data.fiftyTwoWeekLow, data.currency) : 'N/A';
     const high52Val = data.fiftyTwoWeekHigh ? formatStockCurrency(data.fiftyTwoWeekHigh, data.currency) : 'N/A';
     modal52wRange.textContent = (data.fiftyTwoWeekLow && data.fiftyTwoWeekHigh) ? `${low52Val} - ${high52Val}` : 'N/A';
-
+    
     modalPrevClose.textContent = data.prevClose ? formatStockCurrency(data.prevClose, data.currency) : 'N/A';
     modalCurrentPrice.textContent = data.price ? formatStockCurrency(data.price, data.currency) : 'N/A';
-
+    
     // 7. Book Value
     const bookVal = data.bookValue !== undefined && data.bookValue !== null ? data.bookValue : details.book;
     modalBookValue.textContent = formatStockCurrency(bookVal, data.currency);
-
+    
     // 8. Face Value
     const faceVal = data.faceValue !== undefined && data.faceValue !== null ? data.faceValue : details.face;
-    modalFaceValue.textContent = formatStockCurrency(faceVal, data.currency);
-
+    const faceCurrency = isIndian ? data.currency : 'USD';
+    modalFaceValue.textContent = formatStockCurrency(faceVal, faceCurrency);
+    
     // 9. ROCE
     modalRoce.textContent = data.roce !== undefined && data.roce !== null ? data.roce : details.roce;
-
+    
     // 10. ROE
     modalRoe.textContent = data.roe !== undefined && data.roe !== null ? data.roe : details.roe;
-
+    
     // 11. Owner
     modalCompanyOwner.textContent = data.owner !== undefined && data.owner !== null ? data.owner : details.owner;
-
+    
     // 12. Description
     modalCompanyDesc.textContent = data.description !== undefined && data.description !== null ? data.description : details.desc;
-
+    
     companyModal.classList.remove('hidden');
 }
 
@@ -1648,32 +1915,32 @@ const STOCK_INDUSTRIES = {
     // Technology
     'AAPL': 'Technology', 'MSFT': 'Technology', 'NVDA': 'Technology', 'GOOGL': 'Technology',
     'META': 'Technology', 'AVGO': 'Technology', 'ORCL': 'Technology', 'NFLX': 'Technology',
-    'TCS.NS': 'Technology', 'INFY.NS': 'Technology', 'WIPRO.NS': 'Technology',
+    'TCS.NS': 'Technology', 'INFY.NS': 'Technology', 'WIPRO.NS': 'Technology', 
     'HCLTECH.NS': 'Technology', 'TECHM.NS': 'Technology',
     // Financial Services
-    'JPM': 'Financial Services', 'BAC': 'Financial Services', 'MS': 'Financial Services',
+    'JPM': 'Financial Services', 'BAC': 'Financial Services', 'MS': 'Financial Services', 
     'GS': 'Financial Services', 'V': 'Financial Services', 'MA': 'Financial Services',
-    'HDFCBANK.NS': 'Financial Services', 'ICICIBANK.NS': 'Financial Services',
+    'HDFCBANK.NS': 'Financial Services', 'ICICIBANK.NS': 'Financial Services', 
     'SBIN.NS': 'Financial Services', 'AXISBANK.NS': 'Financial Services', 'KOTAKBANK.NS': 'Financial Services',
     // Consumer Cyclical
-    'TSLA': 'Consumer Cyclical', 'AMZN': 'Consumer Cyclical', 'HD': 'Consumer Cyclical',
+    'TSLA': 'Consumer Cyclical', 'AMZN': 'Consumer Cyclical', 'HD': 'Consumer Cyclical', 
     'NKE': 'Consumer Cyclical', 'MCD': 'Consumer Cyclical',
-    'TATASTEEL.NS': 'Consumer Cyclical', 'MARUTI.NS': 'Consumer Cyclical',
+    'TATASTEEL.NS': 'Consumer Cyclical', 'MARUTI.NS': 'Consumer Cyclical', 
     'M&M.NS': 'Consumer Cyclical', 'TATAMOTORS.NS': 'Consumer Cyclical', 'EICHERMOT.NS': 'Consumer Cyclical',
     // Energy & Conglomerates
     'XOM': 'Energy & Conglomerates', 'CVX': 'Energy & Conglomerates', 'COP': 'Energy & Conglomerates',
-    'RELIANCE.NS': 'Energy & Conglomerates', 'ONGC.NS': 'Energy & Conglomerates',
-    'NTPC.NS': 'Energy & Conglomerates', 'COALINDIA.NS': 'Energy & Conglomerates',
+    'RELIANCE.NS': 'Energy & Conglomerates', 'ONGC.NS': 'Energy & Conglomerates', 
+    'NTPC.NS': 'Energy & Conglomerates', 'COALINDIA.NS': 'Energy & Conglomerates', 
     'BPCL.NS': 'Energy & Conglomerates', 'IOC.NS': 'Energy & Conglomerates',
     // Consumer Goods
-    'PG': 'Consumer Goods', 'KO': 'Consumer Goods', 'PEP': 'Consumer Goods',
+    'PG': 'Consumer Goods', 'KO': 'Consumer Goods', 'PEP': 'Consumer Goods', 
     'WMT': 'Consumer Goods', 'COST': 'Consumer Goods',
-    'ITC.NS': 'Consumer Goods', 'HINDUNILVR.NS': 'Consumer Goods',
+    'ITC.NS': 'Consumer Goods', 'HINDUNILVR.NS': 'Consumer Goods', 
     'NESTLEIND.NS': 'Consumer Goods', 'BRITANNIA.NS': 'Consumer Goods', 'TATACONSUM.NS': 'Consumer Goods',
     // Healthcare
-    'LLY': 'Healthcare', 'JNJ': 'Healthcare', 'UNH': 'Healthcare', 'MRK': 'Healthcare',
+    'LLY': 'Healthcare', 'JNJ': 'Healthcare', 'UNH': 'Healthcare', 'MRK': 'Healthcare', 
     'ABBV': 'Healthcare', 'PFE': 'Healthcare',
-    'SUNPHARMA.NS': 'Healthcare', 'CIPLA.NS': 'Healthcare', 'DRREDDY.NS': 'Healthcare',
+    'SUNPHARMA.NS': 'Healthcare', 'CIPLA.NS': 'Healthcare', 'DRREDDY.NS': 'Healthcare', 
     'APOLLOHOSP.NS': 'Healthcare', 'DIVISLAB.NS': 'Healthcare'
 };
 
@@ -1681,25 +1948,25 @@ async function loadMarketInsights() {
     const growingList = document.getElementById('growing-stocks-list');
     const fallingList = document.getElementById('falling-stocks-list');
     const industriesList = document.getElementById('trending-industries-list');
-
+    
     if (growingList) growingList.innerHTML = '<div class="loader-small"></div>';
     if (fallingList) fallingList.innerHTML = '<div class="loader-small"></div>';
     if (industriesList) industriesList.innerHTML = '<div class="loader-small"></div>';
-
+    
     try {
         const symbols = INSIGHTS_SYMBOLS.join(',');
         const url = `/.netlify/functions/stock?action=top10&symbols=${symbols}`;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch insights data');
         const data = await response.json();
-
+        
         insightsStockData = data;
-
+        
         // Filter and map industry names
         data.forEach(item => {
             item.industry = STOCK_INDUSTRIES[item.symbol] || 'Other';
         });
-
+        
         // 1. Render Growing Stocks (sort descending by pct, take top 10)
         const growing = [...data].sort((a, b) => b.percent_change - a.percent_change).slice(0, 10);
         if (growingList) {
@@ -1712,7 +1979,7 @@ async function loadMarketInsights() {
                 growingList.appendChild(row);
             });
         }
-
+        
         // 2. Render Falling Stocks (sort ascending by pct, take top 10)
         const falling = [...data].sort((a, b) => a.percent_change - b.percent_change).slice(0, 10);
         if (fallingList) {
@@ -1725,7 +1992,7 @@ async function loadMarketInsights() {
                 fallingList.appendChild(row);
             });
         }
-
+        
         // 3. Render Trending Industries
         // Group by industry and calculate average change
         const industriesMap = {};
@@ -1735,16 +2002,16 @@ async function loadMarketInsights() {
             }
             industriesMap[stock.industry].push(stock.percent_change);
         });
-
+        
         const industriesListArray = Object.keys(industriesMap).map(industry => {
             const changes = industriesMap[industry];
             const avgChange = changes.reduce((sum, val) => sum + val, 0) / changes.length;
             return { name: industry, change: avgChange };
         });
-
+        
         // Sort industries descending by average change
         industriesListArray.sort((a, b) => b.change - a.change);
-
+        
         if (industriesList) {
             industriesList.innerHTML = '';
             if (industriesListArray.length === 0) {
@@ -1755,7 +2022,7 @@ async function loadMarketInsights() {
                 industriesList.appendChild(row);
             });
         }
-
+        
     } catch (e) {
         console.error("Error loading insights:", e);
         if (growingList) growingList.innerHTML = '<p style="color:var(--danger);font-size:0.9rem;padding:10px;">Failed to load growing stocks.</p>';
@@ -1771,7 +2038,7 @@ function createMoverRow(stock) {
     const isUp = stock.percent_change >= 0;
     const pctSign = isUp ? '+' : '';
     const symbolBase = stock.symbol.replace('.NS', '');
-
+    
     div.innerHTML = `
         <div class="mover-info">
             <span class="mover-name" title="${stock.shortName}">${stock.shortName}</span>
@@ -1784,22 +2051,25 @@ function createMoverRow(stock) {
             </span>
         </div>
     `;
-
+    
     // Clicking a mover row updates the main stock tracker search
     div.addEventListener('click', () => {
         // Switch to dashboard first
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
         const dashTab = document.querySelector('[data-target="view-dashboard"]');
         if (dashTab) dashTab.classList.add('active');
-
+        
         document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
         const dashView = document.getElementById('view-dashboard');
         if (dashView) dashView.classList.add('active');
-
+        
+        // Update header search visibility
+        updateHeaderSearchVisibility();
+        
         symbolInput.value = stock.symbol;
         searchBtn.click();
     });
-
+    
     return div;
 }
 
@@ -1808,11 +2078,11 @@ function createIndustryRow(ind) {
     div.className = 'industry-row';
     const isUp = ind.change >= 0;
     const changeSign = isUp ? '+' : '';
-
+    
     // Calculate a relative width for the bar: Magnitude * 30 capped at 100%
     const fillWidth = Math.min(100, Math.max(5, Math.abs(ind.change) * 30));
     const statusClass = ind.change > 0.1 ? 'up' : (ind.change < -0.1 ? 'down' : 'flat');
-
+    
     div.innerHTML = `
         <div class="industry-info">
             <span class="industry-name">${ind.name}</span>
@@ -1824,17 +2094,17 @@ function createIndustryRow(ind) {
             <div class="industry-progress-fill ${statusClass}" style="width: 0%"></div>
         </div>
     `;
-
+    
     div.addEventListener('click', () => {
         openIndustryBreakdown(ind.name, ind.change);
     });
-
+    
     // Animate progress fill width on load
     setTimeout(() => {
         const fill = div.querySelector('.industry-progress-fill');
         if (fill) fill.style.width = `${fillWidth}%`;
     }, 50);
-
+    
     return div;
 }
 
@@ -1844,15 +2114,15 @@ function openIndustryBreakdown(industryName, avgChange) {
     const modalPerf = document.getElementById('modal-industry-performance');
     const gainersList = document.getElementById('modal-gainers-list');
     const losersList = document.getElementById('modal-losers-list');
-
+    
     if (!modal || !modalTitle || !modalPerf || !gainersList || !losersList) return;
-
+    
     modalTitle.textContent = industryName;
-
+    
     const isUp = avgChange >= 0;
     const sign = isUp ? '+' : '';
     modalPerf.textContent = `${isUp ? '▲' : '▼'} ${sign}${avgChange.toFixed(2)}%`;
-
+    
     if (isUp) {
         modalPerf.className = 'modal-industry-performance up';
     } else if (avgChange < -0.1) {
@@ -1860,14 +2130,14 @@ function openIndustryBreakdown(industryName, avgChange) {
     } else {
         modalPerf.className = 'modal-industry-performance flat';
     }
-
+    
     // Filter stocks by this industry
     const sectorStocks = insightsStockData.filter(stock => stock.industry === industryName);
-
+    
     // Separate into profit makers (>= 0) and loss makers (< 0)
     const gainers = sectorStocks.filter(stock => stock.percent_change >= 0).sort((a, b) => b.percent_change - a.percent_change);
     const losers = sectorStocks.filter(stock => stock.percent_change < 0).sort((a, b) => a.percent_change - b.percent_change);
-
+    
     // Populate lists
     gainersList.innerHTML = '';
     if (gainers.length === 0) {
@@ -1877,7 +2147,7 @@ function openIndustryBreakdown(industryName, avgChange) {
             gainersList.appendChild(createModalStockRow(stock));
         });
     }
-
+    
     losersList.innerHTML = '';
     if (losers.length === 0) {
         losersList.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:12px 10px;text-align:center;">No losers today.</p>';
@@ -1886,7 +2156,7 @@ function openIndustryBreakdown(industryName, avgChange) {
             losersList.appendChild(createModalStockRow(stock));
         });
     }
-
+    
     // Display Modal
     modal.classList.remove('hidden');
 }
@@ -1897,7 +2167,7 @@ function createModalStockRow(stock) {
     const isUp = stock.percent_change >= 0;
     const pctSign = isUp ? '+' : '';
     const symbolBase = stock.symbol.replace('.NS', '');
-
+    
     div.innerHTML = `
         <div class="mover-info">
             <span class="mover-name" style="font-size:0.9rem;" title="${stock.shortName}">${stock.shortName}</span>
@@ -1910,25 +2180,28 @@ function createModalStockRow(stock) {
             </span>
         </div>
     `;
-
+    
     div.addEventListener('click', () => {
         // Close modal
         const modal = document.getElementById('industry-modal');
         if (modal) modal.classList.add('hidden');
-
+        
         // Navigate to dashboard
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
         const dashTab = document.querySelector('[data-target="view-dashboard"]');
         if (dashTab) dashTab.classList.add('active');
-
+        
         document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
         const dashView = document.getElementById('view-dashboard');
         if (dashView) dashView.classList.add('active');
-
+        
+        // Update header search visibility
+        updateHeaderSearchVisibility();
+        
         symbolInput.value = stock.symbol;
         searchBtn.click();
     });
-
+    
     return div;
 }
 
@@ -2053,28 +2326,28 @@ function formatIndexOrCurrency(price, symbol, currency) {
 async function loadGlobalMarkets() {
     const grid = document.getElementById('global-indices-grid');
     if (!grid) return;
-
+    
     grid.innerHTML = '<div class="loader-small"></div>';
-
+    
     const breakdownCard = document.getElementById('index-breakdown-card');
     if (breakdownCard) breakdownCard.classList.add('hidden');
-
+    
     try {
         const symbols = GLOBAL_INDICES.map(idx => idx.symbol).join(',');
         const url = `/.netlify/functions/stock?action=top10&symbols=${symbols}&raw=1`;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch global indices');
         const data = await response.json();
-
+        
         grid.innerHTML = '';
         GLOBAL_INDICES.forEach(indexMeta => {
             const quote = data.find(q => q.symbol === indexMeta.symbol);
             if (!quote) return;
-
+            
             const card = createIndexCard(indexMeta, quote);
             grid.appendChild(card);
         });
-
+        
     } catch (e) {
         console.error("Error loading global markets:", e);
         grid.innerHTML = '<p style="color:var(--danger);font-size:0.9rem;padding:10px;text-align:center;">Failed to load world stock indices.</p>';
@@ -2087,7 +2360,7 @@ function createIndexCard(indexMeta, quote) {
     div.className = 'index-card';
     const isUp = quote.percent_change >= 0;
     const sign = isUp ? '+' : '';
-
+    
     div.innerHTML = `
         <div class="index-card-top">
             <span class="index-card-title">${indexMeta.name}</span>
@@ -2100,14 +2373,14 @@ function createIndexCard(indexMeta, quote) {
             </span>
         </div>
     `;
-
+    
     div.addEventListener('click', () => {
         document.querySelectorAll('.index-card').forEach(c => c.classList.remove('active'));
         div.classList.add('active');
-
+        
         loadIndexBreakdown(indexMeta, quote);
     });
-
+    
     return div;
 }
 
@@ -2119,24 +2392,24 @@ async function loadIndexBreakdown(indexMeta, indexQuote) {
     const perfEl = document.getElementById('breakdown-index-performance');
     const gainersList = document.getElementById('index-gainers-list');
     const losersList = document.getElementById('index-losers-list');
-
+    
     if (!breakdownCard || !gainersList || !losersList) return;
-
+    
     flagEl.textContent = indexMeta.flag;
     nameEl.textContent = `${indexMeta.name} Companies`;
     symEl.textContent = indexMeta.symbol;
-
+    
     const isUp = indexQuote.percent_change >= 0;
     const sign = isUp ? '+' : '';
     perfEl.textContent = `${isUp ? '▲' : '▼'} ${sign}${indexQuote.percent_change.toFixed(2)}%`;
     perfEl.className = isUp ? 'positive' : 'negative';
-
+    
     gainersList.innerHTML = '<div class="loader-small"></div>';
     losersList.innerHTML = '<div class="loader-small"></div>';
     breakdownCard.classList.remove('hidden');
-
+    
     breakdownCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
+    
     try {
         const stocks = GLOBAL_INDEX_STOCKS[indexMeta.symbol] || [];
         if (stocks.length === 0) {
@@ -2144,16 +2417,16 @@ async function loadIndexBreakdown(indexMeta, indexQuote) {
             losersList.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:10px;text-align:center;">No stocks mapped.</p>';
             return;
         }
-
+        
         const symbols = stocks.map(s => s.symbol).join(',');
         const url = `/.netlify/functions/stock?action=top10&symbols=${symbols}&raw=1`;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch index stock quotes');
         const data = await response.json();
-
+        
         const gainers = data.filter(stock => stock.percent_change >= 0).sort((a, b) => b.percent_change - a.percent_change);
         const losers = data.filter(stock => stock.percent_change < 0).sort((a, b) => a.percent_change - b.percent_change);
-
+        
         gainersList.innerHTML = '';
         if (gainers.length === 0) {
             gainersList.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:12px 10px;text-align:center;">No gainers today.</p>';
@@ -2162,7 +2435,7 @@ async function loadIndexBreakdown(indexMeta, indexQuote) {
                 gainersList.appendChild(createIndexStockRow(stock));
             });
         }
-
+        
         losersList.innerHTML = '';
         if (losers.length === 0) {
             losersList.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:12px 10px;text-align:center;">No losers today.</p>';
@@ -2171,7 +2444,7 @@ async function loadIndexBreakdown(indexMeta, indexQuote) {
                 losersList.appendChild(createIndexStockRow(stock));
             });
         }
-
+        
     } catch (e) {
         console.error("Error loading index breakdown:", e);
         gainersList.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;padding:10px;text-align:center;">Failed to load gainers.</p>';
@@ -2185,7 +2458,7 @@ function createIndexStockRow(stock) {
     const isUp = stock.percent_change >= 0;
     const pctSign = isUp ? '+' : '';
     const symbolBase = stock.symbol.replace('.NS', '');
-
+    
     div.innerHTML = `
         <div class="mover-info">
             <span class="mover-name" style="font-size:0.9rem;" title="${stock.shortName}">${stock.shortName}</span>
@@ -2198,20 +2471,23 @@ function createIndexStockRow(stock) {
             </span>
         </div>
     `;
-
+    
     div.addEventListener('click', () => {
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
         const dashTab = document.querySelector('[data-target="view-dashboard"]');
         if (dashTab) dashTab.classList.add('active');
-
+        
         document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
         const dashView = document.getElementById('view-dashboard');
         if (dashView) dashView.classList.add('active');
-
+        
+        // Update header search visibility
+        updateHeaderSearchVisibility();
+        
         symbolInput.value = stock.symbol;
         searchBtn.click();
     });
-
+    
     return div;
 }
 
@@ -2232,7 +2508,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedMode = sessionStorage.getItem('auth_mode');
     const savedName = sessionStorage.getItem('auth_name') || '';
     const savedUsername = sessionStorage.getItem('auth_username') || '';
-
+    
     if (savedMode) {
         enterDashboard(savedMode, savedName, savedUsername);
     } else {
@@ -2242,7 +2518,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize Simulated Trading
     loadTradingState();
     initTradingSimulator();
-    verifyStripeSession();
 });
 
 // --- SIMULATED TRADING ENGINE ---
@@ -2258,7 +2533,7 @@ function loadTradingState() {
     if (saved) {
         try {
             tradingState = JSON.parse(saved);
-        } catch (e) {
+        } catch(e) {
             console.error("Failed to parse saved trade state:", e);
         }
     }
@@ -2280,11 +2555,11 @@ function updateTradeUI() {
     // Calculate Portfolio Value
     let positionsValue = 0;
     let totalInvested = 0;
-
+    
     const positionsList = document.getElementById('positions-list');
     if (positionsList) {
         positionsList.innerHTML = '';
-
+        
         const symbols = Object.keys(tradingState.positions);
         if (symbols.length === 0) {
             positionsList.innerHTML = `
@@ -2296,21 +2571,21 @@ function updateTradeUI() {
             symbols.forEach(sym => {
                 const pos = tradingState.positions[sym];
                 if (pos.shares <= 0) return;
-
+                
                 // Fetch current price (use live price if matching currentSymbol, fallback to avgPrice)
                 let livePrice = pos.avgPrice;
                 const activeSym = currentSymbol ? currentSymbol.replace('.NS', '').replace('.BO', '').toUpperCase() : '';
                 if (activeSym === sym.toUpperCase()) {
                     livePrice = currentPrice;
                 }
-
+                
                 const curVal = pos.shares * livePrice;
                 positionsValue += curVal;
                 totalInvested += pos.shares * pos.avgPrice;
-
+                
                 const pnl = curVal - (pos.shares * pos.avgPrice);
                 const pnlPct = pos.avgPrice > 0 ? (pnl / (pos.shares * pos.avgPrice) * 100) : 0.0;
-
+                
                 const tr = document.createElement('tr');
                 const pnlArrow = pnl >= 0 ? '▲' : '▼';
                 tr.innerHTML = `
@@ -2344,7 +2619,7 @@ function updateTradeUI() {
 
     const totalPnl = totalPortfolio - 1000000.0;
     const totalPnlPct = (totalPnl / 1000000.0) * 100;
-
+    
     const pnlEl = document.getElementById('portfolio-pnl');
     if (pnlEl) {
         pnlEl.textContent = `${totalPnl >= 0 ? '+' : ''}${formatINR(totalPnl)} (${totalPnlPct.toFixed(2)}%)`;
@@ -2385,9 +2660,9 @@ function initTradingSimulator() {
     const executeBtn = document.getElementById('execute-trade-btn');
     const qtyInput = document.getElementById('trade-quantity');
     const estCostEl = document.getElementById('estimated-cost');
-
+    
     if (!buyActionBtn || !sellActionBtn) return;
-
+    
     buyActionBtn.addEventListener('click', () => {
         selectedTradeAction = 'buy';
         buyActionBtn.classList.add('active');
@@ -2395,7 +2670,8 @@ function initTradingSimulator() {
         executeBtn.className = 'confirm-trade-btn buy';
         executeBtn.textContent = 'Confirm Purchase';
         document.querySelector('.trade-summary .summary-row span:first-child').textContent = 'Estimated Cost';
-        recalcEstCost();
+        qtyInput.value = '';
+        populateTradeForm();
     });
 
     sellActionBtn.addEventListener('click', () => {
@@ -2405,7 +2681,8 @@ function initTradingSimulator() {
         executeBtn.className = 'confirm-trade-btn sell';
         executeBtn.textContent = 'Confirm Sale';
         document.querySelector('.trade-summary .summary-row span:first-child').textContent = 'Estimated Revenue';
-        recalcEstCost();
+        qtyInput.value = '';
+        populateTradeForm();
     });
 
     qtyInput.addEventListener('input', recalcEstCost);
@@ -2416,7 +2693,7 @@ function initTradingSimulator() {
         btn.addEventListener('click', (e) => {
             const pct = parseInt(e.target.getAttribute('data-pct'));
             if (!currentPrice || currentPrice <= 0) return;
-
+            
             if (selectedTradeAction === 'buy') {
                 const maxBuyCash = tradingState.cash * (pct / 100);
                 const qty = Math.floor(maxBuyCash / currentPrice);
@@ -2444,12 +2721,12 @@ function initTradingSimulator() {
 
         const symbol = document.getElementById('trade-symbol').value;
         const qty = parseInt(qtyInput.value);
-
+        
         if (!symbol || !currentPrice || currentPrice <= 0) {
             showToast('Please select a valid stock first.', 'error');
             return;
         }
-
+        
         if (isNaN(qty) || qty <= 0) {
             showToast('Please enter a valid positive quantity.', 'error');
             return;
@@ -2459,24 +2736,47 @@ function initTradingSimulator() {
         const symKey = symbol.toUpperCase();
 
         if (selectedTradeAction === 'buy') {
-            const currency = currentStockData ? currentStockData.currency : 'INR';
-            initiateStripeCheckout(currentSymbol || symKey, qty, currentPrice, currency);
-            return;
+            if (cost > tradingState.cash) {
+                showToast('Insufficient funds to complete purchase.', 'error');
+                return;
+            }
+            
+            tradingState.cash -= cost;
+            
+            if (!tradingState.positions[symKey]) {
+                tradingState.positions[symKey] = { shares: 0, avgPrice: 0.0 };
+            }
+            
+            const pos = tradingState.positions[symKey];
+            const oldCost = pos.shares * pos.avgPrice;
+            pos.shares += qty;
+            pos.avgPrice = (oldCost + cost) / pos.shares;
+            
+            tradingState.history.push({
+                type: 'buy',
+                symbol: symKey,
+                shares: qty,
+                price: currentPrice,
+                time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN')
+            });
+            
+            showToast(`Purchased ${qty} shares of ${symKey} successfully!`, 'success');
+            
         } else {
             const pos = tradingState.positions[symKey];
             const ownedShares = pos ? pos.shares : 0;
-
+            
             if (qty > ownedShares) {
                 showToast(`You only own ${ownedShares} shares. Cannot sell ${qty} shares.`, 'error');
                 return;
             }
-
+            
             tradingState.cash += cost;
             pos.shares -= qty;
             if (pos.shares === 0) {
                 delete tradingState.positions[symKey];
             }
-
+            
             tradingState.history.push({
                 type: 'sell',
                 symbol: symKey,
@@ -2484,10 +2784,10 @@ function initTradingSimulator() {
                 price: currentPrice,
                 time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN')
             });
-
+            
             showToast(`Sold ${qty} shares of ${symKey} successfully!`, 'success');
         }
-
+        
         qtyInput.value = '';
         recalcEstCost();
         saveTradingState();
@@ -2513,7 +2813,7 @@ function initTradingSimulator() {
         addFundsCloseBtn.addEventListener('click', () => {
             addFundsModal.classList.add('hidden');
         });
-
+        
         addFundsModal.addEventListener('click', (e) => {
             if (e.target === addFundsModal) {
                 addFundsModal.classList.add('hidden');
@@ -2544,7 +2844,7 @@ function initTradingSimulator() {
             tradingState.cash += amount;
             saveTradingState();
             showToast(`Successfully added ${formatINR(amount)} to simulated cash!`, 'success');
-
+            
             if (addFundsModal) {
                 addFundsModal.classList.add('hidden');
             }
@@ -2587,13 +2887,12 @@ function recalcEstCost() {
     const qtyInput = document.getElementById('trade-quantity');
     const estCostEl = document.getElementById('estimated-cost');
     if (!qtyInput || !estCostEl) return;
-
+    
     const qty = parseInt(qtyInput.value);
-    const currency = currentStockData ? currentStockData.currency : 'INR';
     if (isNaN(qty) || qty <= 0 || !currentPrice || currentPrice <= 0) {
-        estCostEl.textContent = formatStockCurrency(0, currency);
+        estCostEl.textContent = '₹0.00';
     } else {
-        estCostEl.textContent = formatStockCurrency(qty * currentPrice, currency);
+        estCostEl.textContent = formatINR(qty * currentPrice);
     }
 }
 
@@ -2611,9 +2910,9 @@ async function updatePortfolioUI() {
     const portPositionsCountEl = document.getElementById('port-positions-count');
     const portPositionsListEl = document.getElementById('port-positions-list');
     const portHistoryListEl = document.getElementById('port-history-list');
-
+    
     if (!portTotalValueEl) return;
-
+    
     portPositionsListEl.innerHTML = `
         <tr>
             <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
@@ -2622,17 +2921,17 @@ async function updatePortfolioUI() {
             </td>
         </tr>
     `;
-
+    
     const cashVal = tradingState.cash;
     portAvailableCashEl.textContent = formatINR(cashVal);
-
+    
     const symbols = Object.keys(tradingState.positions).filter(sym => tradingState.positions[sym].shares > 0);
     portPositionsCountEl.textContent = `${symbols.length} ${symbols.length === 1 ? 'Asset' : 'Assets'}`;
-
+    
     let totalMarketValue = 0;
     let totalInvestedCapital = 0;
     let positionsData = [];
-
+    
     if (symbols.length === 0) {
         portPositionsListEl.innerHTML = `
             <tr>
@@ -2643,26 +2942,26 @@ async function updatePortfolioUI() {
                 </td>
             </tr>
         `;
-
+        
         const netWorth = cashVal;
         portTotalValueEl.textContent = formatINR(netWorth);
         portTotalChangeEl.textContent = `₹0.00 (0.00%)`;
         portTotalChangeEl.className = 'positive';
         portTotalChangeEl.style.color = 'var(--success)';
-
+        
         portInvestedCapitalEl.textContent = formatINR(0);
         portCapitalRatioEl.textContent = `0.0% asset allocation`;
-
+        
         portHealthScoreEl.textContent = `Cash Heavy`;
         portHealthDescEl.textContent = `100% in liquid cash. No active holdings.`;
-
+        
         drawAllocationChart([100], ['Available Cash'], ['#1e293b']);
     } else {
         try {
             const symbolsParam = symbols.join(',');
             const res = await fetch(`/.netlify/functions/stock?action=top10&symbols=${encodeURIComponent(symbolsParam)}`);
             const data = await res.json();
-
+            
             const priceMap = {};
             data.forEach(item => {
                 priceMap[item.symbol.toUpperCase()] = {
@@ -2671,17 +2970,17 @@ async function updatePortfolioUI() {
                     shortName: item.shortName || item.symbol
                 };
             });
-
+            
             portPositionsListEl.innerHTML = '';
-
+            
             symbols.forEach(sym => {
                 const pos = tradingState.positions[sym];
                 const cleanSym = sym.toUpperCase();
-
+                
                 let livePrice = pos.avgPrice;
                 let currency = 'INR';
                 let shortName = sym;
-
+                
                 if (priceMap[cleanSym]) {
                     livePrice = priceMap[cleanSym].price;
                     currency = priceMap[cleanSym].currency;
@@ -2692,16 +2991,16 @@ async function updatePortfolioUI() {
                         livePrice = currentPrice;
                     }
                 }
-
+                
                 const marketVal = pos.shares * livePrice;
                 const costBasis = pos.shares * pos.avgPrice;
-
+                
                 totalMarketValue += marketVal;
                 totalInvestedCapital += costBasis;
-
+                
                 const pnl = marketVal - costBasis;
                 const pnlPct = costBasis > 0 ? (pnl / costBasis * 100) : 0.0;
-
+                
                 positionsData.push({
                     symbol: sym,
                     shortName: shortName,
@@ -2714,12 +3013,12 @@ async function updatePortfolioUI() {
                     currency: currency
                 });
             });
-
+            
             positionsData.forEach(pos => {
                 const tr = document.createElement('tr');
                 const isPositive = pos.pnl >= 0;
                 const sign = isPositive ? '+' : '';
-
+                
                 tr.innerHTML = `
                     <td style="padding: 12px 8px; border-bottom: 1px solid var(--panel-border);">
                         <div style="display:flex; flex-direction:column;">
@@ -2742,41 +3041,41 @@ async function updatePortfolioUI() {
                         </div>
                     </td>
                 `;
-
+                
                 tr.querySelector('.btn-trade-action').addEventListener('click', (e) => {
                     const symToTrade = e.currentTarget.getAttribute('data-symbol');
                     currentSymbol = symToTrade;
                     fetchStockData(currentSymbol);
-
+                    
                     const tradeTab = document.querySelector('[data-target="view-trade"]');
                     if (tradeTab) tradeTab.click();
                 });
-
+                
                 tr.querySelector('.btn-quick-sell-action').addEventListener('click', (e) => {
                     const symToSell = e.currentTarget.getAttribute('data-symbol');
                     const sellPrice = parseFloat(e.currentTarget.getAttribute('data-price'));
                     quickSellPosition(symToSell, sellPrice);
                 });
-
+                
                 portPositionsListEl.appendChild(tr);
             });
-
+            
             const netWorth = cashVal + totalMarketValue;
             portTotalValueEl.textContent = formatINR(netWorth);
-
+            
             const initialCapital = 1000000.0;
             const totalPnl = netWorth - initialCapital;
             const totalPnlPct = (totalPnl / initialCapital) * 100;
-
+            
             const isOverallPositive = totalPnl >= 0;
             portTotalChangeEl.textContent = `${isOverallPositive ? '+' : ''}${formatINR(totalPnl)} (${isOverallPositive ? '+' : ''}${totalPnlPct.toFixed(2)}%)`;
             portTotalChangeEl.className = isOverallPositive ? 'positive' : 'negative';
             portTotalChangeEl.style.color = isOverallPositive ? 'var(--success)' : 'var(--danger)';
-
+            
             portInvestedCapitalEl.textContent = formatINR(totalInvestedCapital);
             const allocationRatio = (totalMarketValue / netWorth) * 100;
             portCapitalRatioEl.textContent = `${allocationRatio.toFixed(1)}% asset allocation`;
-
+            
             let healthScore = "Unbalanced";
             let healthDesc = "";
             if (allocationRatio < 15) {
@@ -2792,10 +3091,10 @@ async function updatePortfolioUI() {
                 healthScore = "Well Diversified";
                 healthDesc = "Assets are spread across multiple holdings. Risk exposure is balanced.";
             }
-
+            
             portHealthScoreEl.textContent = healthScore;
             portHealthDescEl.textContent = healthDesc;
-
+            
             const chartLabels = [];
             const chartData = [];
             const chartColors = [];
@@ -2808,19 +3107,19 @@ async function updatePortfolioUI() {
                 '#06b6d4', // cyan
                 '#10b981'  // mint green
             ];
-
+            
             positionsData.forEach((pos, index) => {
                 chartLabels.push(pos.symbol.replace('.NS', '').replace('.BO', ''));
                 chartData.push(pos.marketVal);
                 chartColors.push(colorPalette[index % colorPalette.length]);
             });
-
+            
             chartLabels.push('Cash');
             chartData.push(cashVal);
             chartColors.push('#1e293b');
-
+            
             drawAllocationChart(chartData, chartLabels, chartColors);
-
+            
         } catch (e) {
             console.error("Failed to load portfolio live prices:", e);
             portPositionsListEl.innerHTML = `
@@ -2832,7 +3131,7 @@ async function updatePortfolioUI() {
             `;
         }
     }
-
+    
     portHistoryListEl.innerHTML = '';
     if (tradingState.history.length === 0) {
         portHistoryListEl.innerHTML = `
@@ -2845,7 +3144,7 @@ async function updatePortfolioUI() {
         fullHistory.forEach(tx => {
             const tr = document.createElement('tr');
             const totalAmt = tx.shares * tx.price;
-
+            
             tr.innerHTML = `
                 <td style="padding: 12px 8px; border-bottom: 1px solid var(--panel-border);">
                     <span class="portfolio-type-badge ${tx.type}">${tx.type}</span>
@@ -2865,14 +3164,14 @@ function drawAllocationChart(data, labels, colors) {
     const ctx = document.getElementById('portfolioAllocationChart');
     const emptyState = document.getElementById('allocation-empty-state');
     const legendEl = document.getElementById('allocation-legend');
-
+    
     if (!ctx) return;
-
+    
     const existingChart = Chart.getChart("portfolioAllocationChart");
     if (existingChart) {
         try {
             existingChart.destroy();
-        } catch (e) {
+        } catch(e) {
             console.error("Error destroying allocation chart by ID:", e);
         }
     }
@@ -2880,7 +3179,7 @@ function drawAllocationChart(data, labels, colors) {
         portfolioAllocationChartInstance.destroy();
         portfolioAllocationChartInstance = null;
     }
-
+    
     const allZero = data.every(v => v === 0);
     if (allZero) {
         emptyState.classList.remove('hidden');
@@ -2888,10 +3187,10 @@ function drawAllocationChart(data, labels, colors) {
         legendEl.innerHTML = '';
         return;
     }
-
+    
     emptyState.classList.add('hidden');
     ctx.style.display = 'block';
-
+    
     portfolioAllocationChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -2913,7 +3212,7 @@ function drawAllocationChart(data, labels, colors) {
                 },
                 tooltip: {
                     callbacks: {
-                        label: function (context) {
+                        label: function(context) {
                             const label = context.label || '';
                             const val = context.raw || 0;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
@@ -2934,13 +3233,13 @@ function drawAllocationChart(data, labels, colors) {
             cutout: '75%'
         }
     });
-
+    
     legendEl.innerHTML = '';
     labels.forEach((label, idx) => {
         const val = data[idx];
         const total = data.reduce((a, b) => a + b, 0);
         const pct = total > 0 ? (val / total * 100).toFixed(1) : 0;
-
+        
         const legendItem = document.createElement('div');
         legendItem.style.display = 'flex';
         legendItem.style.alignItems = 'center';
@@ -2950,7 +3249,7 @@ function drawAllocationChart(data, labels, colors) {
         legendItem.style.padding = '4px 8px';
         legendItem.style.borderRadius = '6px';
         legendItem.style.color = 'var(--text-muted)';
-
+        
         legendItem.innerHTML = `
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${colors[idx]}; display: inline-block;"></span>
             <span><strong>${label}</strong>: ${pct}%</span>
@@ -2965,13 +3264,13 @@ function quickSellPosition(symbol, livePrice) {
         showToast(`No open shares to sell for ${symbol}.`, 'error');
         return;
     }
-
+    
     const sharesToSell = pos.shares;
     const cost = sharesToSell * livePrice;
-
+    
     tradingState.cash += cost;
     delete tradingState.positions[symbol];
-
+    
     tradingState.history.push({
         type: 'sell',
         symbol: symbol,
@@ -2979,7 +3278,7 @@ function quickSellPosition(symbol, livePrice) {
         price: livePrice,
         time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN')
     });
-
+    
     saveTradingState();
     showToast(`Quick sold ${sharesToSell} shares of ${symbol} for ${formatINR(cost)}!`, 'success');
     updatePortfolioUI();
@@ -2990,19 +3289,20 @@ function populateTradeForm() {
     const symbolField = document.getElementById('trade-symbol');
     const priceField = document.getElementById('trade-price');
     const executeBtn = document.getElementById('execute-trade-btn');
-
+    
     if (!symbolField || !priceField) return;
-
+    
     if (currentSymbol) {
         const cleanSym = currentSymbol.replace('.NS', '').replace('.BO', '');
         symbolField.value = cleanSym;
+        priceField.value = formatINR(currentPrice);
         
-        const currency = currentStockData ? currentStockData.currency : 'INR';
-        priceField.value = formatStockCurrency(currentPrice, currency);
-
         if (executeBtn) {
             executeBtn.disabled = false;
         }
+        
+        // Fetch trade chart data for active trading stock!
+        fetchTradeChartData(currentSymbol);
     } else {
         symbolField.value = '';
         priceField.value = '₹0.00';
@@ -3011,6 +3311,170 @@ function populateTradeForm() {
         }
     }
     recalcEstCost();
+}
+
+// Trade View Line Chart System
+function initTradeChart() {
+    const canvas = document.getElementById('trade-chart-canvas');
+    if (!canvas) return;
+    
+    if (tradeChart) {
+        try {
+            tradeChart.destroy();
+        } catch(e) {
+            console.error("Error destroying tradeChart:", e);
+        }
+        tradeChart = null;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 180);
+    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+    
+    tradeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Price',
+                data: [],
+                borderColor: '#3b82f6',
+                borderWidth: 1.5,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: '#3b82f6',
+                pointHoverBorderWidth: 1.5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleColor: '#f8fafc',
+                    bodyColor: '#f8fafc',
+                    borderColor: 'rgba(255,255,255,0.08)',
+                    borderWidth: 1,
+                    padding: 8,
+                    titleFont: { size: 10 },
+                    bodyFont: { size: 10 },
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y.toFixed(2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    border: { display: true, color: 'rgba(255, 255, 255, 0.08)' },
+                    ticks: {
+                        color: '#64748b',
+                        font: { family: "'Outfit', sans-serif", size: 9 },
+                        maxTicksLimit: 6
+                    }
+                },
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                    border: { display: false },
+                    ticks: {
+                        color: '#64748b',
+                        font: { family: "'Outfit', sans-serif", size: 9 },
+                        maxTicksLimit: 5
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function fetchTradeChartData(symbol) {
+    if (!symbol) return;
+    const tickerNameSpan = document.getElementById('trade-chart-ticker');
+    if (tickerNameSpan) {
+        tickerNameSpan.textContent = symbol.replace('.NS', '').replace('.BO', '');
+    }
+    
+    const loader = document.getElementById('trade-chart-loader');
+    if (loader) loader.classList.remove('hidden');
+    
+    try {
+        const cleanSymbol = symbol.trim().toUpperCase();
+        const res = await fetch(`/.netlify/functions/stock?action=chart&symbol=${encodeURIComponent(cleanSymbol)}&range=${currentTradeChartRange}&interval=${currentTradeChartInterval}`);
+        const data = await res.json();
+        
+        if (data.error || !data.prices || data.prices.length === 0) {
+            console.error("Trade chart data fetch error:", data.error);
+            return;
+        }
+        
+        let labels = data.labels || [];
+        let prices = data.prices || [];
+        const currency = data.currency || 'INR';
+        
+        // If 2W (2 weeks) limit is set, slice last 14 data points
+        if (currentTradeChartLimit && prices.length > currentTradeChartLimit) {
+            labels = labels.slice(-currentTradeChartLimit);
+            prices = prices.slice(-currentTradeChartLimit);
+        }
+        
+        // Update Chart
+        if (!tradeChart) {
+            initTradeChart();
+        }
+        
+        const symbolChar = getCurrencySymbol(currency);
+        tradeChart.data.labels = labels;
+        tradeChart.data.datasets[0].data = prices;
+        tradeChart.data.datasets[0].label = `Price (${symbolChar})`;
+        
+        // Tooltip formatting
+        tradeChart.options.plugins.tooltip.callbacks.label = function(context) {
+            return `${symbolChar} ${context.parsed.y.toFixed(2)}`;
+        };
+        
+        // Scales formatting
+        tradeChart.options.scales.y.ticks.callback = function(value) {
+            return `${symbolChar} ${value}`;
+        };
+        
+        // Determine color based on trend
+        const isPositive = prices.length > 1 ? prices[prices.length - 1] >= prices[0] : true;
+        const color = isPositive ? '#00e699' : '#ef4444';
+        
+        const canvas = document.getElementById('trade-chart-canvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 180);
+            if (isPositive) {
+                gradient.addColorStop(0, 'rgba(0, 230, 153, 0.3)');
+                gradient.addColorStop(1, 'rgba(0, 230, 153, 0.0)');
+            } else {
+                gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
+                gradient.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
+            }
+            tradeChart.data.datasets[0].borderColor = color;
+            tradeChart.data.datasets[0].backgroundColor = gradient;
+            tradeChart.data.datasets[0].pointHoverBorderColor = color;
+        }
+        
+        tradeChart.update();
+        
+    } catch (e) {
+        console.error("Failed to fetch trade chart data:", e);
+    } finally {
+        if (loader) loader.classList.add('hidden');
+    }
 }
 
 // --- NEW FEATURES LOGIC ---
@@ -3043,9 +3507,9 @@ let alertHistoryLogs = JSON.parse(localStorage.getItem('alertHistoryLogs') || '[
 
 function renderAlertHistory(filterText = '') {
     if (!alertHistoryList) return;
-
+    
     alertHistoryList.innerHTML = '';
-    const filteredLogs = alertHistoryLogs.filter(log =>
+    const filteredLogs = alertHistoryLogs.filter(log => 
         log.symbol.toLowerCase().includes(filterText.toLowerCase())
     );
 
@@ -3064,8 +3528,8 @@ function renderAlertHistory(filterText = '') {
         li.style.gap = '4px';
 
         const dateStr = new Date(log.timestamp).toLocaleString();
-        const icon = log.condition === 'above' ?
-            `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="var(--success)" stroke-width="2" style="margin-right:4px;"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>` :
+        const icon = log.condition === 'above' ? 
+            `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="var(--success)" stroke-width="2" style="margin-right:4px;"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>` : 
             `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="var(--danger)" stroke-width="2" style="margin-right:4px;"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>`;
 
         li.innerHTML = `
@@ -3092,7 +3556,7 @@ function addAlertHistoryRecord(symbol, triggeredPrice, condition, targetPrice) {
     // Keep only last 50 alerts
     if (alertHistoryLogs.length > 50) alertHistoryLogs.shift();
     localStorage.setItem('alertHistoryLogs', JSON.stringify(alertHistoryLogs));
-
+    
     // Refresh UI if alerts view is active
     if (document.getElementById('view-alerts').classList.contains('active')) {
         renderAlertHistory(alertHistorySearch ? alertHistorySearch.value : '');
@@ -3127,7 +3591,7 @@ let marqueeSimInterval = null;
 function renderMarqueeHTML() {
     const marqueeContainer = document.getElementById('stock-ticker-marquee');
     if (!marqueeContainer || !marqueeData || marqueeData.length === 0) return;
-
+    
     const itemsHTML = marqueeData.map(item => {
         const isPositive = item.change >= 0;
         const changeClass = isPositive ? 'positive' : 'negative';
@@ -3140,41 +3604,41 @@ function renderMarqueeHTML() {
             </div>
         `;
     }).join('');
-
+    
     // Duplicate the items twice to ensure seamless scrolling loop
     marqueeContainer.innerHTML = itemsHTML + itemsHTML + itemsHTML;
 }
 
 function simulateMarqueeTicks() {
     if (!marqueeData || marqueeData.length === 0) return;
-
+    
     // Randomly select 1-3 items to fluctuate slightly
     const numToUpdate = Math.floor(Math.random() * 3) + 1;
     for (let i = 0; i < numToUpdate; i++) {
         const idx = Math.floor(Math.random() * marqueeData.length);
         const item = marqueeData[idx];
-
+        
         // Small fluctuation between -0.15% and +0.15%
         const percentChange = (Math.random() * 0.3 - 0.15) / 100;
         const priceTick = item.price * percentChange;
-
+        
         item.price += priceTick;
         item.change += priceTick;
         item.percent_change = (item.change / (item.price - item.change)) * 100;
     }
-
+    
     renderMarqueeHTML();
 }
 
 async function initMarquee() {
     const marqueeContainer = document.getElementById('stock-ticker-marquee');
     if (!marqueeContainer) return;
-
+    
     try {
         const response = await fetch('/.netlify/functions/stock?action=top10&symbols=^NSEI,^BSESN,^IXIC,^GSPC,^DJI,RELIANCE.NS,TCS.NS,HDFCBANK.NS,AAPL,MSFT,NVDA,GOOG');
         if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
-
+        
         if (data && data.length > 0) {
             marqueeData = data.map(item => ({
                 symbol: item.symbol,
@@ -3187,7 +3651,7 @@ async function initMarquee() {
         } else {
             throw new Error('Empty data');
         }
-
+        
         renderMarqueeHTML();
         if (!marqueeSimInterval) {
             marqueeSimInterval = setInterval(simulateMarqueeTicks, 5000);
@@ -3212,9 +3676,43 @@ document.addEventListener('DOMContentLoaded', () => {
     renderAlertHistory();
     // Refresh marquee every 60 seconds
     setInterval(initMarquee, 60000);
-
+    
     // Initial profile display updates
     updateProfileUI();
+
+    // Initial alert system rendering
+    renderActiveAlerts();
+    fetchAlertStockData(currentSymbol);
+
+    // Initial header search visibility update
+    updateHeaderSearchVisibility();
+
+    // Initialize Simulated Trading filters
+    document.querySelectorAll('.trade-filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const range = e.target.getAttribute('data-range');
+            const interval = e.target.getAttribute('data-interval');
+            const limit = e.target.getAttribute('data-limit');
+            
+            document.querySelectorAll('.trade-filter-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.background = 'rgba(255, 255, 255, 0.03)';
+                b.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                b.style.color = 'var(--text-muted)';
+            });
+            
+            e.target.classList.add('active');
+            e.target.style.background = 'rgba(0, 230, 153, 0.1)';
+            e.target.style.borderColor = 'rgba(0, 230, 153, 0.3)';
+            e.target.style.color = 'var(--primary)';
+            
+            currentTradeChartRange = range;
+            currentTradeChartInterval = interval;
+            currentTradeChartLimit = limit ? parseInt(limit) : null;
+            
+            fetchTradeChartData(currentSymbol);
+        });
+    });
 });
 
 // --- PROFILE SETTINGS MODAL ENGINE ---
@@ -3223,55 +3721,46 @@ function updateProfileUI() {
     const username = sessionStorage.getItem('auth_username') || 'guest';
     const mode = sessionStorage.getItem('auth_mode') || 'guest';
     const avatar = sessionStorage.getItem('auth_avatar') || '';
-
-    // Update header profile display
-    if (userDisplayName) {
-        const isPremium = localStorage.getItem('user_premium_status') === 'active';
-        const nameText = mode === 'logged_in' ? name : 'Guest';
-        userDisplayName.innerHTML = isPremium ? `${nameText} <span style="color: #f59e0b; margin-left: 6px; font-weight: bold; background: rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: 6px; font-size: 0.75rem;">👑 VIP</span>` : nameText;
+    
+    // Update header login/signup buttons and profile dropdown based on guest mode
+    if (mode === 'guest') {
+        if (headerAuthButtons) headerAuthButtons.classList.remove('hidden');
+        if (headerUserProfile) headerUserProfile.classList.add('hidden');
+    } else {
+        if (headerAuthButtons) headerAuthButtons.classList.add('hidden');
+        if (headerUserProfile) headerUserProfile.classList.remove('hidden');
     }
-
+    
+    // Update header profile display
+    if (userDisplayName) userDisplayName.textContent = mode === 'logged_in' ? name : 'Guest';
+    
     const ddName = document.getElementById('dropdown-name');
     const ddUser = document.getElementById('dropdown-username');
     if (ddName) ddName.textContent = mode === 'logged_in' ? name : 'Guest User';
     if (ddUser) ddUser.textContent = mode === 'logged_in' ? `@${username}` : 'guest';
-
+    
     const viewName = document.getElementById('profile-view-name');
     const viewUser = document.getElementById('profile-view-username');
     const viewMode = document.getElementById('profile-view-mode');
-
+    
     if (viewName) viewName.textContent = name;
     if (viewUser) viewUser.textContent = username ? `@${username}` : 'guest';
     if (viewMode) viewMode.textContent = mode === 'logged_in' ? 'Registered User' : 'Guest Mode';
-
-    const viewStatus = document.getElementById('profile-view-status');
-    if (viewStatus) {
-        const isPremium = localStorage.getItem('user_premium_status') === 'active';
-        if (isPremium) {
-            viewStatus.textContent = 'VIP Premium';
-            viewStatus.style.background = 'rgba(245, 158, 11, 0.15)';
-            viewStatus.style.color = '#f59e0b';
-        } else {
-            viewStatus.textContent = 'Active (Free)';
-            viewStatus.style.background = 'rgba(16, 185, 129, 0.15)';
-            viewStatus.style.color = 'var(--success)';
-        }
-    }
-
+    
     // Update inputs in edit tab
     const editNameInput = document.getElementById('edit-profile-name');
     const editUserInput = document.getElementById('edit-profile-username');
     if (editNameInput) editNameInput.value = name;
     if (editUserInput) editUserInput.value = username;
-
+    
     // Apply avatars
     const headerAvatar = document.getElementById('header-profile-avatar-container');
     const dropdownAvatar = document.getElementById('dropdown-profile-avatar-container');
     const viewAvatar = document.getElementById('profile-view-avatar');
     const editAvatar = document.getElementById('profile-edit-avatar');
-
+    
     const initial = (name || username || 'G').charAt(0).toUpperCase();
-
+    
     const applyAvatar = (container, size) => {
         if (!container) return;
         if (avatar && avatar.startsWith('data:image')) {
@@ -3286,7 +3775,7 @@ function updateProfileUI() {
             container.style.background = 'rgba(59, 130, 246, 0.1)';
         }
     };
-
+    
     applyAvatar(headerAvatar, 'small');
     applyAvatar(dropdownAvatar, 'medium');
     applyAvatar(viewAvatar, 'medium');
@@ -3298,11 +3787,11 @@ function showProfileTab(tabId) {
     document.querySelectorAll('.profile-tab-content').forEach(content => content.classList.add('hidden'));
     // Deactivate all sidebar tab buttons
     document.querySelectorAll('.profile-tab-btn').forEach(btn => btn.classList.remove('active'));
-
+    
     // Show chosen tab content
     const selectedContent = document.getElementById(`tab-${tabId}`);
     if (selectedContent) selectedContent.classList.remove('hidden');
-
+    
     // Activate chosen sidebar button
     const selectedBtn = document.querySelector(`.profile-tab-btn[data-tab="${tabId}"]`);
     if (selectedBtn) selectedBtn.classList.add('active');
@@ -3315,7 +3804,7 @@ function openProfileModal(tabId) {
     profileSettingsModal.classList.remove('hidden');
     showProfileTab(tabId);
     updateProfileUI();
-
+    
     // Set preset selection borders
     const currentAvatar = sessionStorage.getItem('auth_avatar') || '';
     document.querySelectorAll('.avatar-preset').forEach(p => p.classList.remove('selected'));
@@ -3323,7 +3812,7 @@ function openProfileModal(tabId) {
         const selectedPreset = document.querySelector(`.avatar-preset[data-gradient="${currentAvatar}"]`);
         if (selectedPreset) selectedPreset.classList.add('selected');
     }
-
+    
     // Reset password fields
     const pwdCurrent = document.getElementById('change-pwd-current');
     const pwdNew = document.getElementById('change-pwd-new');
@@ -3331,12 +3820,12 @@ function openProfileModal(tabId) {
     if (pwdCurrent) pwdCurrent.value = '';
     if (pwdNew) pwdNew.value = '';
     if (pwdConfirm) pwdConfirm.value = '';
-
+    
     // Set notification checkbox states
     const emailAlerts = document.getElementById('notify-email-alerts');
     const smsAlerts = document.getElementById('notify-sms-alerts');
     const dailyDigest = document.getElementById('notify-daily-digest');
-
+    
     if (emailAlerts) emailAlerts.checked = sessionStorage.getItem('notify_email') !== 'false';
     if (smsAlerts) smsAlerts.checked = sessionStorage.getItem('notify_sms') !== 'false';
     if (dailyDigest) dailyDigest.checked = sessionStorage.getItem('notify_digest') === 'true';
@@ -3388,7 +3877,7 @@ if (saveProfileBtn) {
             showToast('Full Name cannot be empty.', 'error');
             return;
         }
-
+        
         sessionStorage.setItem('auth_name', newName);
         updateProfileUI();
         showToast('Profile info updated successfully.', 'success');
@@ -3402,11 +3891,11 @@ if (saveNotifyBtn) {
         const emailAlerts = document.getElementById('notify-email-alerts');
         const smsAlerts = document.getElementById('notify-sms-alerts');
         const dailyDigest = document.getElementById('notify-daily-digest');
-
+        
         if (emailAlerts) sessionStorage.setItem('notify_email', emailAlerts.checked);
         if (smsAlerts) sessionStorage.setItem('notify_sms', smsAlerts.checked);
         if (dailyDigest) sessionStorage.setItem('notify_digest', dailyDigest.checked);
-
+        
         showToast('Notification preferences saved.', 'success');
     });
 }
@@ -3418,32 +3907,32 @@ if (savePasswordBtn) {
         const pwdCurrent = document.getElementById('change-pwd-current');
         const pwdNew = document.getElementById('change-pwd-new');
         const pwdConfirm = document.getElementById('change-pwd-confirm');
-
+        
         const currentVal = pwdCurrent ? pwdCurrent.value : '';
         const newVal = pwdNew ? pwdNew.value : '';
         const confirmVal = pwdConfirm ? pwdConfirm.value : '';
-
+        
         const mode = sessionStorage.getItem('auth_mode') || 'guest';
         if (mode === 'guest') {
             showToast('Passwords cannot be changed in guest mode. Create an account to save settings.', 'error');
             return;
         }
-
+        
         if (!currentVal || !newVal || !confirmVal) {
             showToast('Please fill out all password fields.', 'error');
             return;
         }
-
+        
         if (newVal.length < 4) {
             showToast('New password must be at least 4 characters long.', 'error');
             return;
         }
-
+        
         if (newVal !== confirmVal) {
             showToast('New passwords do not match.', 'error');
             return;
         }
-
+        
         showToast('Password updated successfully.', 'success');
         pwdCurrent.value = '';
         pwdNew.value = '';
@@ -3471,13 +3960,13 @@ if (profilePicFileInput) {
                 return;
             }
             const reader = new FileReader();
-            reader.onload = function (evt) {
+            reader.onload = function(evt) {
                 const base64Image = evt.target.result;
                 sessionStorage.setItem('auth_avatar', base64Image);
-
+                
                 // Remove selected border from presets
                 document.querySelectorAll('.avatar-preset').forEach(p => p.classList.remove('selected'));
-
+                
                 updateProfileUI();
                 showToast('Profile photo uploaded successfully.', 'success');
             };
@@ -3500,10 +3989,10 @@ document.querySelectorAll('.avatar-preset').forEach(preset => {
     preset.addEventListener('click', (e) => {
         const gradient = e.currentTarget.getAttribute('data-gradient');
         sessionStorage.setItem('auth_avatar', gradient);
-
+        
         document.querySelectorAll('.avatar-preset').forEach(p => p.classList.remove('selected'));
         preset.classList.add('selected');
-
+        
         updateProfileUI();
         showToast('Profile theme updated.', 'success');
     });
@@ -3520,38 +4009,61 @@ if (watchlist.length === 0) {
 
 async function loadWatchlist() {
     const container = document.getElementById('watchlist-container');
-    if (!container) return;
-
-    if (watchlist.length === 0) {
-        container.innerHTML = `
-            <div class="watchlist-empty-state" style="text-align: center; padding: 24px; color: var(--text-muted);">
-                Your watchlist is empty. Search a stock and click "Track" to add it here.
-            </div>
-        `;
+    
+    const alertSymbols = activeAlerts.map(a => a.symbol);
+    const combinedSymbols = [...new Set([...watchlist, ...alertSymbols])];
+    
+    if (combinedSymbols.length === 0) {
+        if (container) {
+            container.innerHTML = `
+                <div class="watchlist-empty-state" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                    Your watchlist is empty. Search a stock and click "Track" to add it here.
+                </div>
+            `;
+        }
         return;
     }
-
+    
     try {
-        const symbolsParam = watchlist.join(',');
+        const symbolsParam = combinedSymbols.join(',');
         const res = await fetch(`/.netlify/functions/stock?action=top10&symbols=${encodeURIComponent(symbolsParam)}`);
         const data = await res.json();
-
+        
+        // 1. Run checkAlerts for all returned prices
+        data.forEach(item => {
+            checkAlerts(item.symbol, item.price);
+        });
+        
+        // 2. Render watchlist UI
+        if (!container) return;
+        
+        if (watchlist.length === 0) {
+            container.innerHTML = `
+                <div class="watchlist-empty-state" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                    Your watchlist is empty. Search a stock and click "Track" to add it here.
+                </div>
+            `;
+            return;
+        }
+        
+        // Filter data to only show watchlist items in the UI list
+        const watchlistData = data.filter(item => watchlist.includes(item.symbol));
+        
         // Preserve open item class if loaded
         const openSymbol = document.querySelector('.watchlist-item.expanded')?.getAttribute('data-symbol') || null;
-
+        
         container.innerHTML = '';
-
-        data.forEach(item => {
+        
+        watchlistData.forEach(item => {
             const symbolBase = item.symbol.replace('.NS', '').replace('.BO', '');
             const isPositive = item.percent_change >= 0;
             const changeClass = isPositive ? 'positive' : 'negative';
             const prefix = isPositive ? '+' : '';
-
+            
             const div = document.createElement('div');
-            // If the item was expanded, keep it expanded
             div.className = `watchlist-item glass-panel${openSymbol === item.symbol ? ' expanded' : ''}`;
             div.setAttribute('data-symbol', item.symbol);
-
+            
             div.innerHTML = `
                 <div class="watchlist-item-header">
                     <span class="watchlist-item-title"><strong>${symbolBase}</strong> - ${item.shortName || item.name}</span>
@@ -3584,56 +4096,79 @@ async function loadWatchlist() {
                     </div>
                 </div>
             `;
-
+            
             // Toggle expanded on click
             div.querySelector('.watchlist-item-header').addEventListener('click', (e) => {
-                // Toggle clicked item
                 const isExpanding = !div.classList.contains('expanded');
-
-                // Close all others
+                
                 document.querySelectorAll('.watchlist-item').forEach(other => {
                     other.classList.remove('expanded');
                     const otherArrow = other.querySelector('.watchlist-expand-arrow');
                     if (otherArrow) otherArrow.style.transform = 'rotate(0deg)';
                 });
-
+                
                 if (isExpanding) {
                     div.classList.add('expanded');
                     const arrow = div.querySelector('.watchlist-expand-arrow');
                     if (arrow) arrow.style.transform = 'rotate(180deg)';
                 }
             });
-
+            
             // Wire up actions
             div.querySelector('.btn-details').addEventListener('click', (e) => {
                 e.stopPropagation();
                 currentSymbol = item.symbol;
+                currentChartRange = '2y';
                 fetchStockData(currentSymbol);
+                // Switch view to dashboard
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                const dashboardNav = document.querySelector('[data-target="view-dashboard"]');
+                if (dashboardNav) dashboardNav.classList.add('active');
+                document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
+                const dashboardView = document.getElementById('view-dashboard');
+                if (dashboardView) dashboardView.classList.add('active');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             });
-
+            
             div.querySelector('.btn-alert').addEventListener('click', (e) => {
                 e.stopPropagation();
-                currentSymbol = item.symbol;
-                fetchStockData(currentSymbol);
-                const alertsTab = document.querySelector('[data-target="view-alerts"]');
-                if (alertsTab) alertsTab.click();
+                alertSelectedSymbol = item.symbol;
+                fetchAlertStockData(alertSelectedSymbol);
+                
+                // Highlight corresponding quick suggestion chip if exists
+                document.querySelectorAll('.quick-suggestion-chips .chip-btn').forEach(b => {
+                    if (b.getAttribute('data-symbol') === alertSelectedSymbol) {
+                        b.classList.add('active');
+                    } else {
+                        b.classList.remove('active');
+                    }
+                });
+                
+                // Switch view to alerts
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                const alertsNav = document.querySelector('[data-target="view-alerts"]');
+                if (alertsNav) alertsNav.classList.add('active');
+                document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
+                const alertsView = document.getElementById('view-alerts');
+                if (alertsView) alertsView.classList.add('active');
             });
-
+            
             div.querySelector('.btn-remove').addEventListener('click', (e) => {
                 e.stopPropagation();
                 removeFromWatchlist(item.symbol);
             });
-
+            
             container.appendChild(div);
         });
     } catch (e) {
         console.error("Watchlist fetch error:", e);
-        container.innerHTML = `
-            <div style="text-align: center; padding: 20px; color: var(--danger);">
-                Failed to load watchlist data.
-            </div>
-        `;
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: var(--danger);">
+                    Failed to load watchlist data.
+                </div>
+            `;
+        }
     }
 }
 
@@ -3652,7 +4187,7 @@ function removeFromWatchlist(symbol) {
 function toggleWatchlist(symbol) {
     const idx = watchlist.indexOf(symbol);
     const symbolBase = symbol.replace('.NS', '').replace('.BO', '');
-
+    
     if (idx > -1) {
         watchlist.splice(idx, 1);
         localStorage.setItem('bt_watchlist', JSON.stringify(watchlist));
@@ -3669,131 +4204,12 @@ function toggleWatchlist(symbol) {
 function updateWatchlistButtonState(symbol) {
     const btn = document.getElementById('add-to-watchlist-btn');
     if (!btn) return;
-
+    
     if (watchlist.includes(symbol)) {
         btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg><span>Watching</span>`;
         btn.classList.add('active');
     } else {
         btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg><span>Watch</span>`;
         btn.classList.remove('active');
-    }
-}
-
-// --- STRIPE BILLING CHECKOUT INTEGRATION ---
-
-async function initiateStripeCheckout(symbol, quantity, price, currency = 'INR') {
-    try {
-        showToast("Opening Stripe billing page...", "info");
-        
-        const response = await fetch('/api/create-checkout-session', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                symbol: symbol,
-                quantity: quantity,
-                price: price,
-                currency: currency
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.url) {
-            localStorage.setItem('pending_stripe_transaction', JSON.stringify({
-                symbol: symbol,
-                quantity: quantity,
-                price: price,
-                currency: currency,
-                time: Date.now()
-            }));
-            window.location.href = data.url;
-        } else {
-            showToast("Stripe checkout failed: " + (data.error || "Unknown error"), "error");
-        }
-    } catch (error) {
-        console.error("Stripe Checkout Error:", error);
-        showToast("Connection to billing server failed.", "error");
-    }
-}
-
-async function verifyStripeSession() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const payment = urlParams.get('payment');
-    const sessionId = urlParams.get('session_id');
-    
-    if (payment === 'success' && sessionId) {
-        showToast("Verifying payment transaction...", "info");
-        try {
-            const response = await fetch('/api/verify-checkout-session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    session_id: sessionId
-                })
-            });
-            const data = await response.json();
-            
-            if (data.success && data.metadata) {
-                const metadata = data.metadata;
-                const symbol = metadata.symbol;
-                
-                // Set premium badge as a bonus / for VIP upgrades
-                localStorage.setItem('user_premium_status', 'active');
-                updateProfileUI();
-                
-                if (symbol !== 'VIP_UPGRADE') {
-                    const quantity = parseInt(metadata.quantity);
-                    const price = parseFloat(metadata.price);
-                    const symKey = symbol.toUpperCase();
-                    
-                    // Add position
-                    const currency = metadata.currency || 'INR';
-                    if (!tradingState.positions[symKey]) {
-                        tradingState.positions[symKey] = { shares: 0, avgPrice: 0.0, currency: currency };
-                    }
-                    
-                    const pos = tradingState.positions[symKey];
-                    pos.currency = currency;
-                    
-                    const oldCost = pos.shares * pos.avgPrice;
-                    const cost = quantity * price;
-                    
-                    pos.shares += quantity;
-                    pos.avgPrice = (oldCost + cost) / pos.shares;
-                    
-                    // Add transaction history record
-                    tradingState.history.push({
-                        type: 'buy',
-                        symbol: symKey,
-                        shares: quantity,
-                        price: price,
-                        currency: currency,
-                        time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN') + ' (Stripe)'
-                    });
-                    
-                    saveTradingState();
-                    showToast(`🎉 Payment Verified! Purchased ${quantity} shares of ${symKey} successfully.`, 'success');
-                } else {
-                    showToast(`🎉 VIP Premium Upgrade successfully verified! Welcome to VIP.`, 'success');
-                }
-                
-                localStorage.removeItem('pending_stripe_transaction');
-            } else {
-                showToast("Payment verification failed: " + (data.error || "Session unpaid"), "error");
-            }
-        } catch (err) {
-            console.error("Verification error:", err);
-            showToast("Failed to verify transaction with payment gateway.", "error");
-        } finally {
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-    } else if (payment === 'cancel') {
-        showToast("Transaction cancelled.", "warning");
-        localStorage.removeItem('pending_stripe_transaction');
-        window.history.replaceState({}, document.title, window.location.pathname);
     }
 }

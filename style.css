@@ -3,8 +3,8 @@
     --bg-darker: #08080c;               /* Deep background behind everything */
     --panel-bg: #11111a;                /* Solid card backgrounds as seen in screenshot */
     --panel-border: #1d1d2b;            /* Sleek dark borders between components */
-    --primary: #3b82f6;                 /* Vibrant Electric Blue for buttons and CTA */
-    --primary-hover: #2563eb;           /* Electric blue hover highlight */
+    --primary: #00e699;                 /* Vibrant Neon Green/Mint for buttons and CTA */
+    --primary-hover: #00b377;           /* Neon green hover highlight */
     --text-main: #f8fafc;
     --text-muted: #718096;              /* Soft dark slate muted text */
     --success: #00e699;                 /* Bright minty green/teal for positive flags/trends */
@@ -22,7 +22,8 @@ body {
     color: var(--text-main);
     min-height: 100vh;
     overflow-x: hidden;
-    background: radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.05), transparent 45%),
+    background: radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.2), transparent 50%),
+                radial-gradient(circle at 100% 0%, rgba(6, 182, 212, 0.2), transparent 40%),
                 radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.02), transparent 45%),
                 var(--bg-darker);
 }
@@ -59,24 +60,21 @@ body {
     margin-bottom: 40px;
 }
 .logo-container {
-    background: #ebebeb;
+    background: transparent;
     padding: 0;
-    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    width: 42px;
-    height: 42px;
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    border: none;
+    width: 52px;
+    height: 52px;
     flex-shrink: 0;
+    box-shadow: none;
 }
 .logo-img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    transform: scale(1.1);
+    object-fit: contain;
 }
 .logo h2 {
     font-family: 'Space Grotesk', sans-serif;
@@ -89,7 +87,7 @@ body {
     -webkit-text-fill-color: transparent;
 }
 .logo h2 .highlight {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    background: linear-gradient(135deg, #00e699 0%, #059669 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -623,23 +621,22 @@ body {
 }
 
 .auth-logo {
-    background: #ebebeb;
+    background: transparent;
     padding: 0;
-    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 54px;
-    height: 54px;
+    width: 68px;
+    height: 68px;
     margin-bottom: 16px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    border: none;
+    box-shadow: none;
 }
 
 .auth-logo img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    transform: scale(1.1);
+    object-fit: contain;
 }
 
 .auth-card h2 {
@@ -653,7 +650,7 @@ body {
 }
 
 .auth-card h2 .highlight {
-    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, #00e699 0%, #10b981 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -2424,4 +2421,72 @@ body {
     .auth-container {
         padding: 40px 20px;
     }
+}
+
+/* Quick Suggestion Chips and Active Alert Cards styling */
+.quick-suggestion-chips {
+    margin-top: 4px;
+}
+
+.chip-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: var(--font-family);
+    outline: none;
+}
+
+.chip-btn:hover {
+    background: rgba(0, 230, 153, 0.08);
+    color: var(--primary);
+    border-color: rgba(0, 230, 153, 0.3);
+    box-shadow: 0 0 12px rgba(0, 230, 153, 0.05);
+}
+
+.chip-btn.active {
+    background: var(--primary);
+    color: #0b0b12;
+    border-color: var(--primary);
+    box-shadow: 0 0 12px rgba(0, 230, 153, 0.2);
+}
+
+.active-alert-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.active-alert-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.delete-alert-btn {
+    background: transparent;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.delete-alert-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
 }
