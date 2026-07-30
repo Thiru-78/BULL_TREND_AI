@@ -72,6 +72,10 @@ let updateInterval = null;
 let activeAlerts = JSON.parse(localStorage.getItem('activeAlerts') || '[]');
 let currentStockData = null;
 let insightsStockData = [];
+let MARKET_INSIGHTS_CACHE = null;
+let MARKET_INSIGHTS_LAST_FETCH = 0;
+let GLOBAL_MARKETS_CACHE = null;
+let GLOBAL_MARKETS_LAST_FETCH = 0;
 let activeStockDetails = null; // Stores current stock full metadata response
 
 // Old TOP_10_SYMBOLS declaration removed to fix SyntaxError
@@ -631,7 +635,113 @@ function runAiPrediction() {
             runAiBtn.textContent = 'Run Analysis Again';
         }, 3000);
         
+        // Add to prediction history (last 5 companies)
+        addPredictionToHistory({
+            symbol: currentStockData.symbol,
+            name: currentStockData.name || currentStockData.symbol,
+            direction: prediction.direction,
+            targetPrice: prediction.predictedPrice,
+            change: prediction.expectedChange,
+            confidence: confidence,
+            currency: currentStockData.currency || 'INR',
+            timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+        });
+        
     }, 1500);
+}
+
+function addPredictionToHistory(prediction) {
+    let history = [];
+    try {
+        const stored = localStorage.getItem('ai_predict_history');
+        if (stored) {
+            history = JSON.parse(stored);
+        }
+    } catch (e) {
+        console.error("Error reading predict history:", e);
+    }
+    
+    // Filter out previous runs of the same company to keep list unique to last 5 companies
+    history = history.filter(item => item.symbol !== prediction.symbol);
+    
+    // Insert at front
+    history.unshift(prediction);
+    
+    // Keep only last 5
+    if (history.length > 5) {
+        history = history.slice(0, 5);
+    }
+    
+    localStorage.setItem('ai_predict_history', JSON.stringify(history));
+    renderPredictHistory();
+}
+
+function renderPredictHistory() {
+    const container = document.getElementById('ai-predict-history-list');
+    if (!container) return;
+    
+    let history = [];
+    try {
+        const stored = localStorage.getItem('ai_predict_history');
+        if (stored) {
+            history = JSON.parse(stored);
+        }
+    } catch (e) {
+        console.error("Error reading predict history:", e);
+    }
+    
+    if (history.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; color: var(--text-muted); padding: 24px 0; font-size: 0.9rem;">
+                No prediction history yet. Run an analysis above.
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = history.map(item => {
+        const isUp = item.direction === 'up';
+        const isDown = item.direction === 'down';
+        
+        let directionBadge = '';
+        if (isUp) {
+            directionBadge = `<span style="color: var(--success); font-weight: 700; background: rgba(0,230,153,0.1); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; display: inline-block;">INCREASE ▲</span>`;
+        } else if (isDown) {
+            directionBadge = `<span style="color: var(--danger); font-weight: 700; background: rgba(255,77,77,0.1); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; display: inline-block;">DECREASE ▼</span>`;
+        } else {
+            directionBadge = `<span style="color: var(--text-muted); font-weight: 700; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; display: inline-block;">STABLE ▬</span>`;
+        }
+        
+        const changeSign = item.change >= 0 ? '+' : '';
+        const changeColor = item.change >= 0 ? 'var(--success)' : 'var(--danger)';
+        const formattedTarget = formatStockCurrency(item.targetPrice, item.currency);
+        const nameShort = item.name.length > 25 ? item.name.substring(0, 22) + '...' : item.name;
+        
+        return `
+            <div style="display: grid; grid-template-columns: 2fr 1.5fr 2fr 2fr 1.5fr; align-items: center; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-weight: 700; color: #fff; font-size: 0.95rem;" title="${item.name}">${nameShort}</span>
+                    <span style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${item.symbol}</span>
+                </div>
+                <div>
+                    ${directionBadge}
+                </div>
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-weight: 600; color: #fff; font-size: 0.9rem;">${formattedTarget}</span>
+                    <span style="font-size: 0.75rem; color: ${changeColor}; font-weight: 600;">${changeSign}${item.change.toFixed(2)}%</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px; padding-right: 20px;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Confidence: <strong>${item.confidence}%</strong></span>
+                    <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden;">
+                        <div style="width: ${item.confidence}%; height: 100%; background: ${item.confidence >= 70 ? 'var(--success)' : (item.confidence >= 50 ? '#f59e0b' : 'var(--danger)')};"></div>
+                    </div>
+                </div>
+                <div style="text-align: right; font-size: 0.75rem; color: var(--text-muted);">
+                    ${item.timestamp}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 
@@ -1945,6 +2055,11 @@ const STOCK_INDUSTRIES = {
 };
 
 async function loadMarketInsights() {
+    const now = Date.now();
+    if (MARKET_INSIGHTS_CACHE && (now - MARKET_INSIGHTS_LAST_FETCH < 60000)) {
+        return;
+    }
+    
     const growingList = document.getElementById('growing-stocks-list');
     const fallingList = document.getElementById('falling-stocks-list');
     const industriesList = document.getElementById('trending-industries-list');
@@ -1959,6 +2074,9 @@ async function loadMarketInsights() {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch insights data');
         const data = await response.json();
+        
+        MARKET_INSIGHTS_CACHE = data;
+        MARKET_INSIGHTS_LAST_FETCH = now;
         
         insightsStockData = data;
         
@@ -2324,6 +2442,11 @@ function formatIndexOrCurrency(price, symbol, currency) {
 }
 
 async function loadGlobalMarkets() {
+    const now = Date.now();
+    if (GLOBAL_MARKETS_CACHE && (now - GLOBAL_MARKETS_LAST_FETCH < 60000)) {
+        return;
+    }
+    
     const grid = document.getElementById('global-indices-grid');
     if (!grid) return;
     
@@ -2338,6 +2461,9 @@ async function loadGlobalMarkets() {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch global indices');
         const data = await response.json();
+        
+        GLOBAL_MARKETS_CACHE = data;
+        GLOBAL_MARKETS_LAST_FETCH = now;
         
         grid.innerHTML = '';
         GLOBAL_INDICES.forEach(indexMeta => {
@@ -2737,31 +2863,12 @@ function initTradingSimulator() {
 
         if (selectedTradeAction === 'buy') {
             if (cost > tradingState.cash) {
-                showToast('Insufficient funds to complete purchase.', 'error');
+                showToast(`Insufficient funds. You need ${formatStockCurrency(cost, currentStockData ? currentStockData.currency : 'INR')} but only have ${formatINR(tradingState.cash)} Available Cash.`, 'error');
                 return;
             }
-            
-            tradingState.cash -= cost;
-            
-            if (!tradingState.positions[symKey]) {
-                tradingState.positions[symKey] = { shares: 0, avgPrice: 0.0 };
-            }
-            
-            const pos = tradingState.positions[symKey];
-            const oldCost = pos.shares * pos.avgPrice;
-            pos.shares += qty;
-            pos.avgPrice = (oldCost + cost) / pos.shares;
-            
-            tradingState.history.push({
-                type: 'buy',
-                symbol: symKey,
-                shares: qty,
-                price: currentPrice,
-                time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN')
-            });
-            
-            showToast(`Purchased ${qty} shares of ${symKey} successfully!`, 'success');
-            
+            const currency = currentStockData ? currentStockData.currency : 'INR';
+            initiateStripeCheckout(currentSymbol || symKey, qty, currentPrice, currency);
+            return;
         } else {
             const pos = tradingState.positions[symKey];
             const ownedShares = pos ? pos.shares : 0;
@@ -3268,6 +3375,10 @@ function quickSellPosition(symbol, livePrice) {
     const sharesToSell = pos.shares;
     const cost = sharesToSell * livePrice;
     
+    if (!confirm(`Are you sure you want to quick sell all ${sharesToSell} shares of ${symbol} for ${formatINR(cost)}?`)) {
+        return;
+    }
+    
     tradingState.cash += cost;
     delete tradingState.positions[symbol];
     
@@ -3713,6 +3824,12 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchTradeChartData(currentSymbol);
         });
     });
+    
+    // Check Stripe checkout session status on load
+    verifyStripeSession();
+    
+    // Load AI Predict History
+    renderPredictHistory();
 });
 
 // --- PROFILE SETTINGS MODAL ENGINE ---
@@ -4211,5 +4328,127 @@ function updateWatchlistButtonState(symbol) {
     } else {
         btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg><span>Watch</span>`;
         btn.classList.remove('active');
+    }
+}
+
+// --- STRIPE BILLING CHECKOUT INTEGRATION ---
+
+async function initiateStripeCheckout(symbol, quantity, price, currency = 'INR') {
+    try {
+        showToast("Opening Stripe billing page...", "info");
+        
+        const response = await fetch('/api/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                symbol: symbol,
+                quantity: quantity,
+                price: price,
+                currency: currency
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.url) {
+            localStorage.setItem('pending_stripe_transaction', JSON.stringify({
+                symbol: symbol,
+                quantity: quantity,
+                price: price,
+                currency: currency,
+                time: Date.now()
+            }));
+            window.location.href = data.url;
+        } else {
+            showToast("Stripe checkout failed: " + (data.error || "Unknown error"), "error");
+        }
+    } catch (error) {
+        console.error("Stripe Checkout Error:", error);
+        showToast("Connection to billing server failed.", "error");
+    }
+}
+
+async function verifyStripeSession() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const payment = urlParams.get('payment');
+    const sessionId = urlParams.get('session_id');
+    
+    if (payment === 'success' && sessionId) {
+        showToast("Verifying payment transaction...", "info");
+        try {
+            const response = await fetch('/api/verify-checkout-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: sessionId
+                })
+            });
+            const data = await response.json();
+            
+            if (data.success && data.metadata) {
+                const metadata = data.metadata;
+                const symbol = metadata.symbol;
+                
+                // Set premium badge as a bonus / for VIP upgrades
+                localStorage.setItem('user_premium_status', 'active');
+                updateProfileUI();
+                
+                if (symbol !== 'VIP_UPGRADE') {
+                    const quantity = parseInt(metadata.quantity);
+                    const price = parseFloat(metadata.price);
+                    const symKey = symbol.toUpperCase();
+                    
+                    // Add position
+                    const currency = metadata.currency || 'INR';
+                    if (!tradingState.positions[symKey]) {
+                        tradingState.positions[symKey] = { shares: 0, avgPrice: 0.0, currency: currency };
+                    }
+                    
+                    const pos = tradingState.positions[symKey];
+                    pos.currency = currency;
+                    
+                    const oldCost = pos.shares * pos.avgPrice;
+                    const cost = quantity * price;
+                    
+                    pos.shares += quantity;
+                    pos.avgPrice = (oldCost + cost) / pos.shares;
+                    
+                    // Add transaction history record
+                    tradingState.history.push({
+                        type: 'buy',
+                        symbol: symKey,
+                        shares: quantity,
+                        price: price,
+                        currency: currency,
+                        time: new Date().toLocaleTimeString('en-IN') + ' ' + new Date().toLocaleDateString('en-IN') + ' (Stripe)'
+                    });
+                    
+                    // Deduct from available cash
+                    tradingState.cash -= cost;
+                    
+                    saveTradingState();
+                    showToast(`🎉 Payment Verified! Purchased ${quantity} shares of ${symKey} successfully.`, 'success');
+                } else {
+                    showToast(`🎉 VIP Premium Upgrade successfully verified! Welcome to VIP.`, 'success');
+                }
+                
+                localStorage.removeItem('pending_stripe_transaction');
+            } else {
+                showToast("Payment verification failed: " + (data.error || "Session unpaid"), "error");
+            }
+        } catch (err) {
+            console.error("Verification error:", err);
+            showToast("Failed to verify transaction with payment gateway.", "error");
+        } finally {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    } else if (payment === 'cancel') {
+        showToast("Transaction cancelled.", "warning");
+        localStorage.removeItem('pending_stripe_transaction');
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
 }

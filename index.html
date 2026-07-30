@@ -486,6 +486,21 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- AI Prediction History Card -->
+                <div class="card predict-history-card glass-panel" style="max-width: 800px; margin: 24px auto 0 auto; padding: 24px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #fff; letter-spacing: 0.5px;">AI Prediction History</h3>
+                    </div>
+                    <p class="subtitle" style="margin-bottom: 20px; font-size: 0.85rem; color: var(--text-muted);">Last 5 analyzed companies</p>
+                    <div class="history-list-container" style="border: 1px solid var(--panel-border); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.1);">
+                        <div class="history-list" id="ai-predict-history-list">
+                            <!-- History items will be inserted here -->
+                            <div style="text-align: center; color: var(--text-muted); padding: 24px 0; font-size: 0.9rem;">No prediction history yet. Run an analysis above.</div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Market Insights View -->

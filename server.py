@@ -179,12 +179,13 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
             session = stripe.checkout.Session.retrieve(session_id)
+            session_dict = session.to_dict()
             
             if session.payment_status == 'paid':
                 self.send_json({
                     "success": True,
-                    "metadata": session.metadata,
-                    "amount_total": session.amount_total
+                    "metadata": session_dict.get('metadata', {}),
+                    "amount_total": session_dict.get('amount_total', 0)
                 })
             else:
                 self.send_json({
@@ -332,10 +333,10 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 day_low = meta.get('regularMarketDayLow')
                 volume = meta.get('regularMarketVolume')
  
-                fiftyTwoWeekHigh = high_52 if high_52 is not None else None
-                fiftyTwoWeekLow = low_52 if low_52 is not None else None
-                regularMarketDayHigh = day_high if day_high is not None else None
-                regularMarketDayLow = day_low if day_low is not None else None
+                fiftyTwoWeekHigh = high_52 * exchange_rate if high_52 is not None else None
+                fiftyTwoWeekLow = low_52 * exchange_rate if low_52 is not None else None
+                regularMarketDayHigh = day_high * exchange_rate if day_high is not None else None
+                regularMarketDayLow = day_low * exchange_rate if day_low is not None else None
                 regularMarketVolume = volume
  
                 # yfinance fundamental metrics fetch
