@@ -26,7 +26,7 @@ def load_dotenv():
 load_dotenv()
 
 import stripe
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
 
 INFO_CACHE = {}
 SEARCH_RESULT_CACHE = {}
@@ -118,7 +118,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
 
             if not stripe.api_key:
                 load_dotenv()
-                stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+                stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
                 
             if not stripe.api_key:
                 raise Exception("STRIPE_SECRET_KEY is not configured in .env file.")
@@ -178,7 +178,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
 
             if not stripe.api_key:
                 load_dotenv()
-                stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+                stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
 
             session = stripe.checkout.Session.retrieve(session_id)
             session_dict = session.to_dict()
