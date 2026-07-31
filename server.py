@@ -117,6 +117,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 raise Exception("Invalid transaction amount.")
 
             if not stripe.api_key:
+                load_dotenv()
                 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
                 
             if not stripe.api_key:
@@ -176,6 +177,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 raise Exception("Missing session_id parameter.")
 
             if not stripe.api_key:
+                load_dotenv()
                 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
             session = stripe.checkout.Session.retrieve(session_id)
